@@ -58,6 +58,8 @@ type Grants interface {
 	// Use counts one use of a capped action in a window (D2); within limit it
 	// keeps it, over the limit it gives it back and reports false.
 	Use(ctx context.Context, agent, action, window string, limit int, ttl time.Duration) (used int, ok bool, err error)
+	// Count reads the uses of a capped action in a window without counting one (D11).
+	Count(ctx context.Context, agent, action, window string) (int, error)
 }
 
 var approveWords = regexp.MustCompile(`(?i)^\s*(approve|approved|yes|ok|okay|go|go ahead|do it|allow|confirm)\b`)
@@ -211,6 +213,12 @@ func (m *MemoryGrants) Use(_ context.Context, agent, action, window string, limi
 	return m.counts[k], true, nil
 }
 
+func (m *MemoryGrants) Count(_ context.Context, agent, action, window string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.counts[agent+"\x00"+action+"\x00"+window], nil
+}
+
 // ---- Redis store --------------------------------------------------------------
 
 // RedisGrants keeps `tavern:gate:blocked:<agent>` (list, JSON, newest first),
@@ -323,4 +331,12 @@ func (r *RedisGrants) Use(ctx context.Context, agent, action, window string, lim
 		return 0, false, err
 	}
 	return int(res[0]), res[1] == 1, nil
+}
+
+func (r *RedisGrants) Count(ctx context.Context, agent, action, window string) (int, error) {
+	n, err := r.C.Get(ctx, r.key("count", agent, action, window)).Int()
+	if errors.Is(err, redis.Nil) {
+		return 0, nil
+	}
+	return n, err
 }
