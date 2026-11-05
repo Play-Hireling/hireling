@@ -19,7 +19,7 @@ jobs:
     env:
       GOTOOLCHAIN: local
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version: "1.24"
@@ -46,7 +46,7 @@ jobs:
           - { name: egress, file: services/egress/Dockerfile }
           - { name: ledger-writer, file: services/ledger-writer/Dockerfile }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: docker build
         run: docker build -f ${{ matrix.image.file }} -t hireling/${{ matrix.image.name }}:ci .
 
@@ -54,7 +54,7 @@ jobs:
     name: Compose file
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: docker compose config (every profile)
         env:
           DEEPSEEK_API_KEY: ci
@@ -66,7 +66,7 @@ jobs:
     name: Docs, scripts and secrets
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: relative links in markdown
@@ -81,7 +81,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: every commit is signed off
