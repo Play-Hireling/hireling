@@ -25,6 +25,8 @@ Fallback turns are recorded in usage but not priced.
 
 After each turn the runtime reads Hermes' session store and prices it at DeepSeek's public rates (cache hit, cache miss, output; off-peak at half). Totals per hireling per UTC day: `GET /agents/<id>/budget`. Inside a container: `hireling usage 1h`.
 
+**Off-peak routines (D9).** DeepSeek's peak hours are 01:00–04:00 and 06:00–10:00 UTC, Monday to Friday. During them, a hireling on DeepSeek holds its routines (P3 work) until the window ends, so they run at the off-peak rate, which is half price. P0–P2 work runs at once. A hireling on another provider never waits.
+
 ### Turn speed
 
 Turns go through the Hermes API server already running in each container (warm), not a fresh `hermes chat` process: a trivial reply takes ~3 s instead of ~20 s. Conversation turns (no task, not the planner) run with low reasoning effort (`runtime.chat_reasoning: low`); set `default` to keep the model's own setting. Force the old path with `HIRELING_TURNS=cli`.
