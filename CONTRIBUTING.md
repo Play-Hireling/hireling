@@ -18,7 +18,7 @@ Thanks for helping build the tavern. This page is everything you need for a firs
 
 ## Set up
 
-You need Go 1.24 and Docker (only for the full stack).
+You need Go 1.27 and Docker (only for the full stack).
 
 ```bash
 git clone https://github.com/Play-Hireling/hireling.git && cd hireling

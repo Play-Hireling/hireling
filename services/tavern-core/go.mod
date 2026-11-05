@@ -1,6 +1,6 @@
 module github.com/Play-Hireling/hireling/services/tavern-core
 
-go 1.24
+go 1.26.0
 
 require (
 	github.com/Play-Hireling/hireling/runtime v0.0.0
