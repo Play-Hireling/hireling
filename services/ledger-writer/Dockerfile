@@ -9,7 +9,7 @@ RUN go mod download
 COPY runtime/ ./
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ledger-writer ./cmd/ledger-writer
 
-FROM alpine:3.20
+FROM alpine:3.24
 RUN apk add --no-cache git ca-certificates \
  && addgroup -g 10002 writer && adduser -D -u 10002 -G writer -h /repo writer \
  && mkdir -p /repo && chown writer:writer /repo
