@@ -10,7 +10,7 @@ tavern-core is the tavern's state: tasks with leases, priorities, the quest, usa
 | --- | --- |
 | `GET /healthz` | `{"status":"ok","agents":[…]}` or `503` when Redis is down |
 | `GET /agents` | Loaded hireling ids |
-| `GET /agents/{id}/budget` | Profile budget + today's `tokens_used`, `cost_usd`, `turns`, `over_budget` (D7: today's tokens ≥ `tokens_per_day`) and `resets_at` (next 00:00 UTC) |
+| `GET /agents/{id}/budget` | Profile budget + today's `tokens_used`, `cost_usd`, `turns`, `over_budget` (D7: today's tokens ≥ `tokens_per_day`), `resets_at` (next 00:00 UTC) and `web_calls_used` (D8) |
 | `GET /agents/{id}/usage` | Today's totals and recent turns |
 | `POST /agents/{id}/usage` | One turn's usage (the runtime posts it) |
 | `GET /agents/{id}/queue` | The hireling's open tasks in priority order (P0 > … > P3, ties by goal contribution) |
@@ -19,7 +19,7 @@ tavern-core is the tavern's state: tasks with leases, priorities, the quest, usa
 
 | Call | Body | Returns |
 | --- | --- | --- |
-| `POST /actions/check` | `{"agent","action","target","use","why","turn","task"}` | `{"level":"free|capped|owner","reason","limit","period","used","counted"}` |
+| `POST /actions/check` | `{"agent","action","target","use","why","turn","task"}` | `{"level":"free|capped|owner|budget","reason","limit","period","used","counted"}` — action `web_call` is counted against `web_calls_per_day` (D8) |
 | `GET /agents/{id}/blocked?since=` | — | Actions the gate blocked for this hireling since an RFC 3339 time (to attach to its card) |
 | `POST /actions/pending` | `{"decision","agent","actions":[{"action","target"}],"approve"}` | The pending card |
 | `POST /actions/answer` | `{"decision","choice"}` | `{"granted":[…]}` — on a yes, one use of each action |

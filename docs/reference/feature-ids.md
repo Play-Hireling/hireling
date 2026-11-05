@@ -56,7 +56,7 @@ Code comments and docs refer to features by short ids (`A5`, `B11`, …). This i
 | D5 | Hard deny list | ✅ |
 | D6 | Data rule (no finance/KYC/legal hosts, toolkits or Ledger pages) | ✅ |
 | D7 | Token budget enforced (over budget → only P0/P1) | ✅ |
-| D8 | Web-call budget | 🗺 |
+| D8 | Web-call budget | ✅ |
 | D9 | Off-peak scheduling | 🗺 |
 | D11 | Autonomy first: ask only what is the owner's | ✅ |
 

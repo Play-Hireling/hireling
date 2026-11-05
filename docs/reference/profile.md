@@ -14,7 +14,7 @@ planner: false                       # true for the one hireling that plans (the
 
 budget:
   tokens_per_day: 150000             # mana · per UTC day; over it only P0/P1 run
-  web_calls_per_day: 200
+  web_calls_per_day: 200            # web_search + web_extract per UTC day (D8)
 
 autonomy:
   free: [draft, research, write_shared_file, message_agent]
@@ -61,6 +61,8 @@ Marks the hireling whose answers may carry a `plan` block and who approves hando
 
 ### `budget`
 `tokens_per_day` is the hireling's daily mana: every turn's usage is recorded against it and reported by `GET /agents/<id>/budget`. Once it is reached, the runtime runs only P0/P1 work (D7): your commands and answers, bar messages about P0/P1 tasks, and alerts. Any other bar message is held, unacked, and runs after 00:00 UTC. Set it to `0` for no budget.
+
+`web_calls_per_day` caps Hermes' `web_search` and `web_extract` per UTC day (D8). The gate hook counts every call in tavern-core. Past the cap, the call is blocked with the level `budget`, and the hireling carries on without the web until 00:00 UTC; this does not ask you. Only the blocked calls go to the Autonomy Log. Set it to `0` for no cap.
 
 ### `autonomy`
 Action names are free-form slugs that prompts and the policy gate use. Rules enforced at load:

@@ -9,6 +9,7 @@
 //	GET  /agents/{id}/blocked?since=  actions the gate blocked for a hireling (to attach to its card)
 //	POST /actions/pending             a decision card that grants those actions if the owner says yes
 //	POST /actions/answer              the owner's choice on that card → the actions granted (one use each)
+//	                                  action "web_call" (D8): counted against the profile's web_calls_per_day → free | budget
 //	GET  /autonomy?day=&agent=&limit= the Autonomy Log (D4): who, what, why, outcome, turn cost
 //	POST /asks                        D11: before a card opens — yours (send it back) | joined (open card on the task) | ask
 //	POST /asks/opened                 the card the runtime opened (one per task)
@@ -178,7 +179,7 @@ func (s *Server) budget(w http.ResponseWriter, r *http.Request) {
 		"resets_at":      time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339),
 		"cost_usd":       day.Totals.CostUSD,
 		"turns":          day.Turns,
-		"web_calls_used": 0, // D8
+		"web_calls_used": s.webUsed(r, p.ID), // D8
 	})
 }
 
@@ -261,8 +262,12 @@ func (s *Server) check(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Agent = agent(r, req.Agent)
-	d := s.Gate.Check(req)
 	action := strings.ToLower(strings.TrimSpace(req.Action))
+	if action == WebCall {
+		s.webCall(w, r, req)
+		return
+	}
+	d := s.Gate.Check(req)
 	// D2: a capped action counts against its window; past the cap it is the owner's.
 	if d.Level == policy.Capped && strings.HasSuffix(action, "_usd") {
 		// A cap in dollars needs the amount of each spend, which the hook
@@ -889,4 +894,70 @@ func (s *Server) listAsks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"open": open, "stats": stats})
+}
+
+// ---- D8: web-call budget ----------------------------------------------------
+
+// WebCall is the action the gate hook sends for Hermes' web_search and
+// web_extract: a read of the web, counted per UTC day against the profile's
+// budget.web_calls_per_day (0 = no budget).
+const WebCall = "web_call"
+
+// webCall answers a web_call check. Within the day's budget it is Free (and,
+// with "use", counted); past it the level is "budget": blocked until the UTC
+// day turns, and written to the Autonomy Log. Calls within the budget are
+// reads and stay out of the log, like every read.
+func (s *Server) webCall(w http.ResponseWriter, r *http.Request, req policy.Request) {
+	p := s.Gate.Profile(req.Agent)
+	if p == nil {
+		writeJSON(w, http.StatusOK, policy.Decision{Level: policy.Owner, Reason: "unknown agent"})
+		return
+	}
+	limit := p.Budget.WebCallsPerDay
+	if limit <= 0 || s.Grants == nil {
+		writeJSON(w, http.StatusOK, policy.Decision{Level: policy.Free, Reason: "no web-call budget in the profile"})
+		return
+	}
+	ctx := r.Context()
+	day := usage.DayKey(s.now())
+	var used int
+	var ok bool
+	var err error
+	if req.Use {
+		used, ok, err = s.Grants.Use(ctx, req.Agent, WebCall, day, limit, 26*time.Hour)
+	} else {
+		used, err = s.Grants.Count(ctx, req.Agent, WebCall, day)
+		ok = used < limit
+	}
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if ok {
+		writeJSON(w, http.StatusOK, policy.Decision{Level: policy.Free, Reason: fmt.Sprintf("web call %d/%d today (D8)", used, limit),
+			Limit: limit, Period: "day", Used: used, Counted: req.Use})
+		return
+	}
+	d := policy.Decision{Level: policy.Budget, Reason: fmt.Sprintf("daily web-call budget reached (D8): %d/%d, resets at 00:00 UTC", used, limit),
+		Limit: limit, Period: "day", Used: used}
+	if req.Use && s.Log != nil {
+		e := autonomy.Entry{At: s.now(), Agent: req.Agent, Action: WebCall, Target: req.Target, Outcome: "blocked",
+			Level: string(d.Level), Reason: d.Reason, Used: used, Limit: limit, Period: "day", Why: req.Why, Turn: req.Turn, Task: req.Task}
+		if err := s.Log.Append(ctx, e); err != nil {
+			fail(w, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, d)
+}
+
+func (s *Server) webUsed(r *http.Request, agent string) int {
+	if s.Grants == nil {
+		return 0
+	}
+	n, err := s.Grants.Count(r.Context(), agent, WebCall, usage.DayKey(s.now()))
+	if err != nil {
+		return 0
+	}
+	return n
 }

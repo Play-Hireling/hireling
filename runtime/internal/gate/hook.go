@@ -25,7 +25,7 @@ type Payload struct {
 
 // Decision is tavern-core's answer (policy.Decision on the wire).
 type Decision struct {
-	Level   string `json:"level"` // free | capped | the owner
+	Level   string `json:"level"` // free | capped | owner | budget (D8)
 	Reason  string `json:"reason"`
 	Limit   int    `json:"limit"`
 	Period  string `json:"period,omitempty"`
@@ -157,6 +157,10 @@ func (h *Hook) Decide(ctx context.Context, p Payload) Outcome {
 		switch d.Level {
 		case "free":
 			continue
+		case "budget":
+			// D8: the day's web calls are spent; not the owner's to approve.
+			return Outcome{Checked: checked, Message: "Blocked by the autonomy gate: " + d.Reason +
+				". Nothing was fetched. Do not try another way to reach the web and do not ask the owner for this; carry on with what you have and say in your answer what you could not check."}
 		case "capped":
 			// D2: tavern-core counted this use within the cap. An answer
 			// without the count (an older tavern-core) cannot prove the cap
