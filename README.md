@@ -90,6 +90,8 @@ Read [docs/architecture.md](docs/architecture.md) for the full picture and [docs
 
 ## Meet the party
 
+<p align="center"><img src="docs/assets/party.jpg" alt="The starter party: Innkeeper, Scriptwriter, Social Media, Dev and Paid Traffic" width="100%"></p>
+
 | Hireling | Model | Does | Never does without you |
 | --- | --- | --- | --- |
 | **Innkeeper** | DeepSeek V4-Pro | Splits requests into tasks, assigns, prioritizes, approves handoffs | Hiring, firing, budget caps |
