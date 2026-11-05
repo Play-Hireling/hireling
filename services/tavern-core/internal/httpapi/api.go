@@ -163,16 +163,22 @@ func (s *Server) budget(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	used := day.Totals.Tokens()
+	now := s.now().UTC()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"agent":             p.ID,
 		"model":             p.Model,
 		"day":               day.Day,
 		"tokens_per_day":    p.Budget.TokensPerDay,
 		"web_calls_per_day": p.Budget.WebCallsPerDay,
-		"tokens_used":       day.Totals.Tokens(), // today, UTC; the cap itself is enforced in D7
-		"cost_usd":          day.Totals.CostUSD,
-		"turns":             day.Turns,
-		"web_calls_used":    0, // D8
+		"tokens_used":       used, // today, UTC
+		// D7: at or over tokens_per_day the runtime holds P2/P3 work until
+		// the UTC day turns; 0 in the profile means no token budget.
+		"over_budget":    p.Budget.TokensPerDay > 0 && used >= int64(p.Budget.TokensPerDay),
+		"resets_at":      time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339),
+		"cost_usd":       day.Totals.CostUSD,
+		"turns":          day.Turns,
+		"web_calls_used": 0, // D8
 	})
 }
 

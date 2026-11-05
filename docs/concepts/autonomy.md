@@ -73,7 +73,7 @@ Be precise about what is a hard guarantee today and what relies on the model fol
 | The hireling asks before an owner-decided action | the gate blocks it and the `ask` block opens the card | **Enforced** — a blocked action does not run |
 | Capped counts (e.g. 3 posts/day) | `POST /actions/check` counts each use per UTC day or ISO week (D2) | **Enforced** — past the cap the action is the owner's |
 | Every free/capped action is logged | Autonomy Log in tavern-core (D4) | **Enforced** — an action that cannot be logged does not run |
-| Daily token budget | recorded per turn, shown by `GET /agents/<id>/budget` | **Reported** — a hard stop is on the roadmap |
+| Daily token budget | recorded per turn; over `tokens_per_day` the runtime runs only P0/P1 (D7) | **Enforced** — your commands and answers, P0/P1 tasks and alerts run; other bar work waits, unacked, until 00:00 UTC |
 
 The defence against a model that ignores its prompt is that the dangerous capabilities are not there to use: no route to the host, no account toolkit, no delete tool, no money. Give a hireling a capability only when its profile and your comfort allow it.
 

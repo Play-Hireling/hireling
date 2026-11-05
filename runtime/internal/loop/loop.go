@@ -144,6 +144,12 @@ type Loop struct {
 	// ask about the hireling's own action goes back to it, a task keeps one
 	// open card, and the owner's answers are counted against the recommendation.
 	Asks AskBook
+	// Budget, when set, holds P2/P3 bar work once today's tokens reach the
+	// profile's tokens_per_day (D7); the owner's commands and P0/P1 tasks still run.
+	Budget BudgetReader
+	budget budgetState
+	held   []bar.Message
+	now    func() time.Time // tests; time.Now otherwise
 	// Leases, when set, makes a turn on a task of this hireling hold its
 	// 15-minute lease (B4): leased before the turn, renewed on every step,
 	// finished (done/failed) or released (waiting on the owner) after it.
@@ -625,9 +631,7 @@ func (l *Loop) RunBar(ctx context.Context) error {
 	if len(pending) > 0 {
 		l.logf("bar: %d message(s) pending from before the restart", len(pending))
 	}
-	for _, m := range l.order(ctx, pending) {
-		l.HandleMessage(ctx, m)
-	}
+	l.handleBatch(ctx, pending)
 	wait := l.BusWait
 	if wait <= 0 {
 		wait = 20 * time.Second
@@ -647,8 +651,8 @@ func (l *Loop) RunBar(ctx context.Context) error {
 			}
 			continue
 		}
-		for _, m := range l.order(ctx, msgs) {
-			l.HandleMessage(ctx, m)
+		if len(msgs) > 0 || len(l.held) > 0 {
+			l.handleBatch(ctx, msgs)
 		}
 	}
 	return ctx.Err()

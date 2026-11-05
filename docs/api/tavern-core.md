@@ -10,7 +10,7 @@ tavern-core is the tavern's state: tasks with leases, priorities, the quest, usa
 | --- | --- |
 | `GET /healthz` | `{"status":"ok","agents":[…]}` or `503` when Redis is down |
 | `GET /agents` | Loaded hireling ids |
-| `GET /agents/{id}/budget` | Profile budget + today's `tokens_used`, `cost_usd`, `turns` |
+| `GET /agents/{id}/budget` | Profile budget + today's `tokens_used`, `cost_usd`, `turns`, `over_budget` (D7: today's tokens ≥ `tokens_per_day`) and `resets_at` (next 00:00 UTC) |
 | `GET /agents/{id}/usage` | Today's totals and recent turns |
 | `POST /agents/{id}/usage` | One turn's usage (the runtime posts it) |
 | `GET /agents/{id}/queue` | The hireling's open tasks in priority order (P0 > … > P3, ties by goal contribution) |

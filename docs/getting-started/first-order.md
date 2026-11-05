@@ -54,7 +54,7 @@ After every turn the runtime reads Hermes' session store, prices the tokens and 
 
 ```bash
 curl -s http://127.0.0.1:8080/agents/scriptwriter/budget
-# {"tokens_per_day":150000,"tokens_used":41210,"cost_usd":0.0061,"turns":3,…}
+# {"tokens_per_day":150000,"tokens_used":41210,"over_budget":false,"resets_at":"…","cost_usd":0.0061,"turns":3,…}
 ```
 
 ## Where to look

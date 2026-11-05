@@ -406,3 +406,42 @@ func (c *Client) AskAnswer(ctx context.Context, decision, choice string) (*Answe
 	}
 	return &out.Card, nil
 }
+
+// Budget is GET /agents/{id}/budget (A2 + D7): today's tokens against the
+// profile's tokens_per_day.
+type Budget struct {
+	Agent        string  `json:"agent"`
+	Day          string  `json:"day"`
+	TokensPerDay int     `json:"tokens_per_day"`
+	TokensUsed   int64   `json:"tokens_used"`
+	CostUSD      float64 `json:"cost_usd"`
+	OverBudget   bool    `json:"over_budget"`
+	ResetsAt     string  `json:"resets_at,omitempty"`
+}
+
+// Budget reads this hireling's budget for today.
+func (c *Client) Budget(ctx context.Context) (*Budget, error) {
+	if c.BaseURL == "" {
+		return nil, ErrNotConfigured
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/agents/"+url.PathEscape(c.Agent)+"/budget", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-Hireling", c.Agent)
+	h := c.HTTP
+	if h == nil {
+		h = &http.Client{Timeout: 10 * time.Second}
+	}
+	res, err := h.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode/100 != 2 {
+		b, _ := io.ReadAll(io.LimitReader(res.Body, 300))
+		return nil, fmt.Errorf("tavern: budget %s: %s", res.Status, bytes.TrimSpace(b))
+	}
+	var b Budget
+	return &b, json.NewDecoder(res.Body).Decode(&b)
+}
