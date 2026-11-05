@@ -30,13 +30,13 @@
 
 | Component | Language | State | Talks to |
 | --- | --- | --- | --- |
-| `hireling` runtime | Go 1.24, static | Hermes store on its volume | Hermes (local), tavern-core, Redis, ledger-writer |
+| `hireling` runtime | Go 1.27, static | Hermes store on its volume | Hermes (local), tavern-core, Redis, ledger-writer |
 | Hermes Agent | Python (upstream image) | `/opt/data` | model APIs through egress, MCP servers |
-| tavern-core | Go 1.24, distroless | Redis | — (called by everyone) |
-| egress | Go 1.24, distroless | none (no cache by design) | the internet |
+| tavern-core | Go 1.27, distroless | Redis | — (called by everyone) |
+| egress | Go 1.27, distroless | none (no cache by design) | the internet |
 | Redis | — | AOF volume | — |
 | gbrain | Bun + GBrain | Postgres + checkout | git host |
-| ledger-writer | Go 1.24 + git | working clone | git host |
+| ledger-writer | Go 1.27 + git | working clone | git host |
 
 ## Networks
 
