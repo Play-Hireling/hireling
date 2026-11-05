@@ -337,3 +337,72 @@ func (c *Client) Answer(ctx context.Context, decision, choice string) ([]GateAct
 	}
 	return out.Granted, nil
 }
+
+// ---- D11: autonomy first ----------------------------------------------------
+
+// AskCheck is the question the runtime puts to tavern-core before opening a card.
+type AskCheck struct {
+	Task     string `json:"task,omitempty"`
+	Turn     string `json:"turn,omitempty"`
+	Action   string `json:"action,omitempty"`
+	Question string `json:"question,omitempty"`
+	Blocked  bool   `json:"blocked,omitempty"` // the gate blocked an action in this turn
+}
+
+// AskVerdict is tavern-core's answer: yours | joined | ask.
+type AskVerdict struct {
+	Verdict   string   `json:"verdict"`
+	Level     string   `json:"level,omitempty"`
+	Reason    string   `json:"reason,omitempty"`
+	Decision  string   `json:"decision,omitempty"`
+	FollowUps []string `json:"follow_ups,omitempty"`
+}
+
+// OpenAsk is a card the runtime opened (POST /asks/opened).
+type OpenAsk struct {
+	Decision    string `json:"decision"`
+	Task        string `json:"task,omitempty"`
+	Action      string `json:"action,omitempty"`
+	Question    string `json:"question"`
+	Recommended string `json:"recommended,omitempty"`
+}
+
+// AnsweredAsk is a closed card: its follow-ups and whether the owner picked the
+// recommendation.
+type AnsweredAsk struct {
+	Task              string   `json:"task,omitempty"`
+	Question          string   `json:"question"`
+	FollowUps         []string `json:"follow_ups,omitempty"`
+	Choice            string   `json:"choice"`
+	PickedRecommended bool     `json:"picked_recommended"`
+}
+
+// PreAsk asks whether an ask block opens a card (POST /asks).
+func (c *Client) PreAsk(ctx context.Context, in AskCheck) (AskVerdict, error) {
+	var v AskVerdict
+	body := map[string]any{"agent": c.Agent, "task": in.Task, "turn": in.Turn, "action": in.Action, "question": in.Question, "blocked": in.Blocked}
+	err := c.post(ctx, "/asks", body, &v)
+	return v, err
+}
+
+// AskOpened records the card the runtime opened (POST /asks/opened).
+func (c *Client) AskOpened(ctx context.Context, o OpenAsk) error {
+	return c.post(ctx, "/asks/opened", map[string]any{"agent": c.Agent, "decision": o.Decision, "task": o.Task,
+		"action": o.Action, "question": o.Question, "recommended": o.Recommended}, nil)
+}
+
+// AskAnswer closes a card with the owner's choice (POST /asks/answer); nil when
+// tavern-core has no card with that id.
+func (c *Client) AskAnswer(ctx context.Context, decision, choice string) (*AnsweredAsk, error) {
+	var out struct {
+		Found bool        `json:"found"`
+		Card  AnsweredAsk `json:"card"`
+	}
+	if err := c.post(ctx, "/asks/answer", map[string]string{"decision": decision, "choice": choice}, &out); err != nil {
+		return nil, err
+	}
+	if !out.Found {
+		return nil, nil
+	}
+	return &out.Card, nil
+}

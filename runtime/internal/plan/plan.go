@@ -325,11 +325,26 @@ Approve when the request fits the owner's role and the week's priorities; deny w
 // — or anything beyond its autonomy): one fenced block tagged `ask`. The
 // runtime opens the decision card in the front desk; the turn ends and nothing
 // moves until the owner's choice comes back through the command queue.
+//
+// D11: the block names the gate action it is about (`action`, the profile's
+// action name) so the runtime can send back an ask about the hireling's own
+// action, and the first option is the hireling's recommendation, with `why`.
 type Ask struct {
 	Question string   `json:"question"`
 	Options  []string `json:"options"`
 	Context  string   `json:"context,omitempty"`
 	Urgency  string   `json:"urgency,omitempty"` // normal | high
+	Action   string   `json:"action,omitempty"`  // the gate action, e.g. merge_pr, payment, connect_account
+	Why      string   `json:"why,omitempty"`     // why the first option is the recommendation
+}
+
+// Recommendation is the line that leads the card's context: the first
+// option and why (D11). Empty without a reason.
+func (a *Ask) Recommendation() string {
+	if a.Why == "" || len(a.Options) == 0 {
+		return ""
+	}
+	return "Recommended: " + a.Options[0] + " — " + a.Why
 }
 
 var askFence = regexp.MustCompile("(?s)```ask[ \\t]*\\r?\\n(.*?)\\r?\\n[ \\t]*```")
@@ -341,7 +356,11 @@ const (
 	MaxContext  = 1000
 	MinOptions  = 2
 	MaxOptions  = 6
+	MaxWhy      = 300
+	MaxAction   = 60
 )
+
+var actionName = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 // ParseAsk extracts an ask block; ErrNone when absent.
 func ParseAsk(answer string) (*Ask, string, error) {
@@ -375,6 +394,14 @@ func (a *Ask) Validate() error {
 	case len([]rune(a.Context)) > MaxContext:
 		return fmt.Errorf("ask: context over %d characters", MaxContext)
 	}
+	a.Action = strings.ToLower(strings.TrimSpace(a.Action))
+	a.Why = strings.Join(strings.Fields(a.Why), " ")
+	switch {
+	case a.Action != "" && (len(a.Action) > MaxAction || !actionName.MatchString(a.Action)):
+		return fmt.Errorf("ask: action %q must be the profile's action name (snake_case, ≤ %d)", a.Action, MaxAction)
+	case len([]rune(a.Why)) > MaxWhy:
+		return fmt.Errorf("ask: why over %d characters", MaxWhy)
+	}
 	seen := map[string]bool{}
 	for i, o := range a.Options {
 		o = strings.TrimSpace(o)
@@ -398,12 +425,17 @@ func (a *Ask) Validate() error {
 	return nil
 }
 
-// AskInstructions is appended to every hireling's prompt.
-const AskInstructions = `## When only the owner can decide
+// AskInstructions is appended to every hireling's prompt (D3 + D11).
+const AskInstructions = `## Autonomy first: ask the owner only what is theirs
 
-Payments, contracts, customer data, deleting anything, production changes, or anything outside your autonomy are the owner's. Do not do them, do not ask in prose and do not pick for them: stop, say what you prepared, and end your answer with ONE fenced block tagged ` + "`ask`" + `:
-{"question": "<one question, ≤ 300 chars>", "options": ["<option 1>", "<option 2>", "…up to 6, ≤ 80 chars each"], "context": "<what the owner needs to know, ≤ 1000 chars, paths on the common table>", "urgency": "normal|high"}
-The card appears on the owner's "Waiting on you" board; their choice comes back to you as a new command. Until then, wait — work on something else if you have it.`
+Before you ask, check your autonomy in your profile:
+- **Free** action → do it; the Autonomy Log records it. Do not ask.
+- **Capped** action with uses left this day/week → do it. Do not ask.
+- Ask only for: an action listed under "owner decides" (payments, contracts, customer data, deleting anything, production changes…), a capped action over its cap, connecting an account (a Connect card), or a choice that cannot be undone and that the brief does not settle. When the autonomy gate blocks a tool call, that action is the owner's too.
+
+When you ask, do not ask in prose and do not pick for them: stop, say what you prepared, and end your answer with ONE fenced block tagged ` + "`ask`" + `:
+{"question": "<one question, ≤ 300 chars>", "options": ["<your recommendation>", "<other option>", "…up to 6, ≤ 80 chars each"], "why": "<why you recommend the first option, ≤ 300 chars>", "action": "<the action name from your profile, e.g. merge_pr, payment, connect_account>", "context": "<what the owner needs to know, ≤ 1000 chars, paths on the common table>", "urgency": "normal|high"}
+The first option is always your recommendation. An ask about an action that is yours comes back to you: decide it and carry on. One card per task: a second question on a task that is already waiting joins that card and comes back to you with the owner's answer. Their choice comes back to you as a new command; until then, wait — work on something else if you have it.`
 
 // ---- Ledger pages (E3) ------------------------------------------------
 

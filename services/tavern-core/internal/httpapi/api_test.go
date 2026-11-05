@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Play-Hireling/hireling/runtime/profile"
+	"github.com/Play-Hireling/hireling/services/tavern-core/internal/asks"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/autonomy"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/goal"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/policy"
@@ -487,5 +488,78 @@ func TestAutonomyLogOverHTTP(t *testing.T) {
 	}
 	if code := call(t, srv, "GET", "/autonomy?day=yesterday", "", "", nil); code != 400 {
 		t.Fatalf("bad day: %d", code)
+	}
+}
+
+// D11: an ask about the hireling's own action goes back to it (once per task
+// and action); one card per task; the owner's choice closes it with the follow-ups
+// and counts whether he picked the recommendation.
+func TestAutonomyFirstAsks(t *testing.T) {
+	p := &profile.Profile{ID: "social-media", Model: "deepseek-v4-flash"}
+	p.Autonomy.Free = []string{"draft"}
+	p.Autonomy.Capped = map[string]map[string]int{"publish_owned_channel": {"per_day": 1}, "ad_spend_usd": {"per_day": 50}}
+	p.Autonomy.OwnerDecides = profile.HardDeny
+	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
+	g := policy.NewMemoryGrants()
+	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(),
+		Grants: g, Asks: asks.NewMemory(), Now: func() time.Time { return now }}
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+	pre := func(body string) AskVerdict {
+		var v AskVerdict
+		if code := call(t, srv, "POST", "/asks", "social-media", body, &v); code != 200 {
+			t.Fatalf("POST /asks %s: %d", body, code)
+		}
+		return v
+	}
+	if v := pre(`{"task":"T-1","action":"draft","question":"Can I draft the post?"}`); v.Verdict != "yours" || v.Level != "free" {
+		t.Fatalf("free: %+v", v)
+	}
+	if v := pre(`{"task":"T-1","action":"draft","question":"Really?"}`); v.Verdict != "ask" || !strings.Contains(v.Reason, "asked again") {
+		t.Fatalf("asked again: %+v", v)
+	}
+	if v := pre(`{"task":"T-2","action":"publish_owned_channel"}`); v.Verdict != "yours" || !strings.Contains(v.Reason, "0/1 used this day") {
+		t.Fatalf("within the cap: %+v", v)
+	}
+	call(t, srv, "POST", "/actions/check", "social-media", `{"action":"publish_owned_channel","use":true}`, nil)
+	if v := pre(`{"task":"T-3","action":"publish_owned_channel"}`); v.Verdict != "ask" {
+		t.Fatalf("over the cap is the owner's: %+v", v)
+	}
+	if v := pre(`{"task":"T-4","action":"ad_spend_usd"}`); v.Verdict != "ask" {
+		t.Fatalf("a spend is the owner's: %+v", v)
+	}
+	if v := pre(`{"task":"T-5","action":"draft","blocked":true}`); v.Verdict != "ask" {
+		t.Fatalf("the gate blocked something in the turn: %+v", v)
+	}
+	if v := pre(`{"task":"T-6","action":"payment"}`); v.Verdict != "ask" || v.Level != "owner" {
+		t.Fatalf("payment: %+v", v)
+	}
+	call(t, srv, "POST", "/asks/opened", "social-media", `{"decision":"d-1","task":"T-6","action":"payment","question":"Pay the invoice?","recommended":"Pay it"}`, nil)
+	if v := pre(`{"task":"T-6","action":"draft","question":"And post the receipt?"}`); v.Verdict != "joined" || v.Decision != "d-1" || len(v.FollowUps) != 1 {
+		t.Fatalf("one card per task: %+v", v)
+	}
+	var ans struct {
+		Found bool          `json:"found"`
+		Card  asks.Answered `json:"card"`
+	}
+	call(t, srv, "POST", "/asks/answer", "", `{"decision":"d-1","choice":"Pay it"}`, &ans)
+	if !ans.Found || !ans.Card.PickedRecommended || ans.Card.FollowUps[0] != "And post the receipt?" {
+		t.Fatalf("answer: %+v", ans)
+	}
+	call(t, srv, "POST", "/asks/answer", "", `{"decision":"nope","choice":"x"}`, &ans)
+	if ans.Found {
+		t.Fatal("unknown card found")
+	}
+	var list struct {
+		Open  []asks.Open  `json:"open"`
+		Stats []asks.Stats `json:"stats"`
+	}
+	call(t, srv, "GET", "/asks?agent=social-media", "", "", &list)
+	if len(list.Open) != 0 || len(list.Stats) != 1 {
+		t.Fatalf("list: %+v", list)
+	}
+	st := list.Stats[0]
+	if st.Bounced != 2 || st.Opened != 1 || st.Joined != 1 || st.Answered != 1 || st.CouldHaveDecidedAlone != 1 {
+		t.Fatalf("stats: %+v", st)
 	}
 }

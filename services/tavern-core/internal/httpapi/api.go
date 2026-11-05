@@ -10,6 +10,10 @@
 //	POST /actions/pending             a decision card that grants those actions if the owner says yes
 //	POST /actions/answer              the owner's choice on that card → the actions granted (one use each)
 //	GET  /autonomy?day=&agent=&limit= the Autonomy Log (D4): who, what, why, outcome, turn cost
+//	POST /asks                        D11: before a card opens — yours (send it back) | joined (open card on the task) | ask
+//	POST /asks/opened                 the card the runtime opened (one per task)
+//	POST /asks/answer                 the owner's choice → the card's follow-ups and whether they picked the recommendation
+//	GET  /asks?agent=                 open cards and per-hireling counters ("could have decided alone")
 //	GET  /tasks · POST /tasks
 //	POST /tasks/{id}/lease · /renew · /handoff · /finish
 //	POST /tasks/{id}/approve · /deny    B6: the Innkeeper decides a requested handoff
@@ -29,6 +33,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Play-Hireling/hireling/services/tavern-core/internal/asks"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/autonomy"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/goal"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/policy"
@@ -44,7 +49,9 @@ type Server struct {
 	// Grants holds the owner's approvals for blocked actions (D1/D3; nil = off).
 	Grants policy.Grants
 	// Log is the Autonomy Log (D4; nil = off): every "use" check is written.
-	Log   autonomy.Store
+	Log autonomy.Store
+	// Asks is the book of questions to the owner (D11; nil = off: every ask opens a card).
+	Asks  asks.Store
 	Ready func() error     // store ping
 	Now   func() time.Time // defaults to time.Now
 	// Extra registers more routes on the same mux (the Front Desk).
@@ -70,6 +77,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /actions/pending", s.pending)
 	mux.HandleFunc("POST /actions/answer", s.answer)
 	mux.HandleFunc("GET /autonomy", s.autonomyLog)
+	mux.HandleFunc("POST /asks", s.preAsk)
+	mux.HandleFunc("POST /asks/opened", s.askOpened)
+	mux.HandleFunc("POST /asks/answer", s.askAnswer)
+	mux.HandleFunc("GET /asks", s.listAsks)
 	mux.HandleFunc("GET /goal", s.getGoal)
 	mux.HandleFunc("PUT /goal", s.setGoal)
 	mux.HandleFunc("POST /goal/progress", s.reportGoal)
@@ -716,4 +727,160 @@ func (s *Server) unblock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, t)
+}
+
+// ---- D11: autonomy first ----------------------------------------------------
+
+// AskVerdict is the answer of POST /asks.
+type AskVerdict struct {
+	Verdict   string   `json:"verdict"` // yours | joined | ask
+	Level     string   `json:"level,omitempty"`
+	Reason    string   `json:"reason,omitempty"`
+	Decision  string   `json:"decision,omitempty"` // joined: the open card
+	FollowUps []string `json:"follow_ups,omitempty"`
+}
+
+// preAsk decides what happens to an `ask` block before a card is opened:
+//   - the task already has an open card → the question joins it (one card per task);
+//   - the named action is Free, or Capped with uses left in its window, and
+//     the gate did not block anything in that turn → it goes back to the
+//     hireling ("this one is yours"), once per task (or turn) and action;
+//   - anything else → ask: the runtime opens the card.
+func (s *Server) preAsk(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Agent    string `json:"agent"`
+		Task     string `json:"task"`
+		Turn     string `json:"turn"`
+		Action   string `json:"action"`
+		Question string `json:"question"`
+		Blocked  bool   `json:"blocked"` // the gate blocked an action in this turn
+	}
+	if err := decode(r, &in); err != nil {
+		fail(w, err)
+		return
+	}
+	in.Agent = agent(r, in.Agent)
+	if in.Agent == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent is required"})
+		return
+	}
+	if s.Asks == nil {
+		writeJSON(w, http.StatusOK, AskVerdict{Verdict: "ask"})
+		return
+	}
+	ctx := r.Context()
+	if in.Task != "" {
+		o, err := s.Asks.Join(ctx, in.Agent, in.Task, in.Question)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		if o != nil {
+			writeJSON(w, http.StatusOK, AskVerdict{Verdict: "joined", Decision: o.Decision, FollowUps: o.FollowUps,
+				Reason: "task " + in.Task + " already has a card waiting on the owner"})
+			return
+		}
+	}
+	action := strings.ToLower(strings.TrimSpace(in.Action))
+	if action == "" || in.Blocked {
+		writeJSON(w, http.StatusOK, AskVerdict{Verdict: "ask"})
+		return
+	}
+	d := s.Gate.Check(policy.Request{Agent: in.Agent, Action: action})
+	yours, reason := false, d.Reason
+	switch {
+	case d.Level == policy.Free:
+		yours = true
+	case d.Level == policy.Capped && !strings.HasSuffix(action, "_usd") && s.Grants != nil && d.Limit > 0:
+		used, err := s.Grants.Count(ctx, in.Agent, action, policy.PeriodKey(d.Period, s.now()))
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		if used < d.Limit {
+			yours, reason = true, fmt.Sprintf("within the cap: %d/%d used this %s", used, d.Limit, d.Period)
+		}
+	}
+	if !yours {
+		writeJSON(w, http.StatusOK, AskVerdict{Verdict: "ask", Level: string(d.Level), Reason: d.Reason})
+		return
+	}
+	key := in.Task
+	if key == "" {
+		key = in.Turn
+	}
+	if key == "" {
+		key = "-"
+	}
+	first, err := s.Asks.Bounce(ctx, in.Agent, key, action)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if !first {
+		// Asked again after being sent back: the owner sees it, and the card says so.
+		writeJSON(w, http.StatusOK, AskVerdict{Verdict: "ask", Level: string(d.Level), Reason: "asked again after being told it is the hireling's own (" + reason + ")"})
+		return
+	}
+	writeJSON(w, http.StatusOK, AskVerdict{Verdict: "yours", Level: string(d.Level), Reason: reason})
+}
+
+func (s *Server) askOpened(w http.ResponseWriter, r *http.Request) {
+	var o asks.Open
+	if err := decode(r, &o); err != nil {
+		fail(w, err)
+		return
+	}
+	o.Agent = agent(r, o.Agent)
+	if o.Agent == "" || o.Decision == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "agent and decision are required"})
+		return
+	}
+	o.Action = strings.ToLower(strings.TrimSpace(o.Action))
+	o.At = s.now()
+	if s.Asks != nil {
+		if err := s.Asks.Opened(r.Context(), o); err != nil {
+			fail(w, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, o)
+}
+
+func (s *Server) askAnswer(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Decision string `json:"decision"`
+		Choice   string `json:"choice"`
+	}
+	if err := decode(r, &in); err != nil {
+		fail(w, err)
+		return
+	}
+	if s.Asks == nil || in.Decision == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"found": false})
+		return
+	}
+	a, err := s.Asks.Answer(r.Context(), in.Decision, in.Choice)
+	if errors.Is(err, asks.ErrNotFound) {
+		writeJSON(w, http.StatusOK, map[string]any{"found": false})
+		return
+	}
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"found": true, "card": a})
+}
+
+func (s *Server) listAsks(w http.ResponseWriter, r *http.Request) {
+	if s.Asks == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"open": []asks.Open{}, "stats": []asks.Stats{}})
+		return
+	}
+	open, stats, err := s.Asks.List(r.Context(), r.URL.Query().Get("agent"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"open": open, "stats": stats})
 }

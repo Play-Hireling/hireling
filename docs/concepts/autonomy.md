@@ -34,6 +34,22 @@ The runtime validates it (question ≤ 300 characters, 2–6 options of ≤ 80, 
 
 Your choice comes back to that hireling as a command — `Decision: <question> → chosen: <option> (decision <id>)` — and it continues from there. **No answer means wait.** Nothing times out into a yes.
 
+### Autonomy first (D11)
+
+A loud hand only works if it is rare, so hirelings ask you only what is yours. Every `ask` names the gate `action` it is about and puts the hireling's recommendation first, with `why`:
+
+```json
+{"question": "Merge PR #7 into main?", "options": ["Merge it", "Not now"],
+ "why": "CI green, reviewed", "action": "merge_pr", "context": "2 files."}
+```
+
+The card leads with *"Recommended: Merge it — CI green, reviewed"*. Before it opens, tavern-core decides (`POST /asks`):
+- **Yours.** The action is Free, or Capped with uses left in its window, and the gate blocked nothing in that turn. No card opens. The hireling gets a note on its own inbox — decide it, do it, the Autonomy Log records it. This happens once per task and action. If it asks again, the card opens and says so.
+- **Joined.** The task already has a card waiting on you. The new question joins it and goes back to the hireling with your answer. One card per task.
+- **Ask.** The card opens.
+
+When you answer, tavern-core counts whether you picked the recommended option. `GET /asks` shows, per hireling, asks per task and **could have decided alone** (the share of cards where you simply agreed). A high rate means it asks what it could have decided. If tavern-core cannot be reached, the card opens: when in doubt, you see it.
+
 ## Repeated failure escalates to you
 
 If a hireling fails the same task several turns in a row (`runtime.escalate_after`, default 3), the runtime stops retrying and opens a decision by itself with four options: **Retry · Reassign · Drop · Change brief**. The task is `blocked` with reason `needs_human` until you answer.

@@ -434,6 +434,7 @@ func build(logger *log.Logger) (*loop.Loop, error) {
 		UsageDir:        filepath.Join(home, "usage"),
 		Tavern:          tavernClient(p.ID),
 		Gate:            gateGrants(p.ID),
+		Asks:            askBook(p.ID),
 		GateTurnFile:    filepath.Join(home, gate.TurnFile),
 		Bus:             bus,
 		Tasks:           tasks,
@@ -445,6 +446,15 @@ func build(logger *log.Logger) (*loop.Loop, error) {
 
 		DeskIDs: escIDs,
 	}, nil
+}
+
+// askBook is tavern-core's book of asks (D11); nil without TAVERN_URL.
+func askBook(agent string) loop.AskBook {
+	url := strings.TrimRight(os.Getenv("TAVERN_URL"), "/")
+	if url == "" {
+		return nil
+	}
+	return &tavern.Client{BaseURL: url, Agent: agent}
 }
 
 // gateCommand is the pre_tool_call hook Hermes runs before every tool call
