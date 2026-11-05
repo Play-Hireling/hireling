@@ -1,14 +1,29 @@
-<div align="center">
+<p align="center">
+  <a href="https://playhireling.com"><img src="docs/assets/banner.jpg" alt="Hireling — a medieval tavern where your AI agents do modern work" width="100%"></a>
+</p>
 
-# Hireling
+<p align="center">
+  <a href="https://github.com/Play-Hireling/hireling/actions/workflows/ci.yml"><img src="https://github.com/Play-Hireling/hireling/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSING.md"><img src="https://img.shields.io/badge/license-Apache--2.0%20%2B%20FSL--1.1-e0b33d?style=flat-square&labelColor=1a1209" alt="License: Apache-2.0 + FSL-1.1"></a>
+  <img src="https://img.shields.io/badge/Go-1.26-e0b33d?style=flat-square&labelColor=1a1209&logo=go&logoColor=f2e6c7" alt="Go 1.26">
+  <img src="https://img.shields.io/badge/runs%20on-docker%20compose-e0b33d?style=flat-square&labelColor=1a1209&logo=docker&logoColor=f2e6c7" alt="Runs on Docker Compose">
+  <a href="docs/guides/claude-code.md"><img src="https://img.shields.io/badge/ready%20for-Claude%20Code-e0b33d?style=flat-square&labelColor=1a1209" alt="Ready for Claude Code"></a>
+</p>
 
-**A medieval tavern where your AI agents do modern work.**
+<p align="center">
+  <b><a href="https://playhireling.com/play/">▶ Play the demo</a></b> ·
+  <a href="docs/getting-started/quickstart.md">Quickstart</a> ·
+  <a href="docs/README.md">Docs</a> ·
+  <a href="docs/roadmap.md">Roadmap</a> ·
+  <a href="https://playhireling.com">Website</a>
+</p>
 
-Run a small team of AI agents — the *hirelings* — on your own server. They take orders, split work, talk to each other at the bar, share files on the common table, remember what they learned in a shared ledger, and stop to ask you before anything irreversible.
+Run a small team of AI agents — the *hirelings* — on your own server. They take orders, split work, talk to each other at the bar, share files on the common table, remember what they learned in a shared ledger, and **stop to ask you before anything irreversible**.
 
-[Website](https://playhireling.com) · [Play the demo](https://playhireling.com/play/) · [Quickstart](docs/getting-started/quickstart.md) · [Docs](docs/README.md) · [Roadmap](docs/roadmap.md)
-
-</div>
+<p align="center">
+  <a href="https://playhireling.com/play/"><img src="docs/assets/tavern-night.webp" alt="The tavern at night: the Innkeeper at the bar, the Scriptwriter, Social Media, Dev and Paid Traffic at their desks" width="88%"></a><br>
+  <sub>The tavern at night. Every desk is a hireling in its own container; the Innkeeper plans at the bar. <a href="https://playhireling.com/play/">Play it in your browser →</a></sub>
+</p>
 
 ---
 
@@ -75,6 +90,8 @@ Read [docs/architecture.md](docs/architecture.md) for the full picture and [docs
 
 ## Meet the party
 
+<p align="center"><img src="docs/assets/party.jpg" alt="The starter party: Innkeeper, Scriptwriter, Social Media, Dev and Paid Traffic" width="100%"></p>
+
 | Hireling | Model | Does | Never does without you |
 | --- | --- | --- | --- |
 | **Innkeeper** | DeepSeek V4-Pro | Splits requests into tasks, assigns, prioritizes, approves handoffs | Hiring, firing, budget caps |
@@ -98,6 +115,14 @@ Add your own in minutes: [docs/guides/add-a-hireling.md](docs/guides/add-a-hirel
 
 Don't want to run servers? **Hireling Cloud** hosts your tavern with the full pixel-art game, more hirelings, screens, a branded tavern for your company and support. Join the early-access list at **[playhireling.com](https://playhireling.com)**.
 
+## Community
+
+- **Questions and ideas:** [GitHub Discussions](https://github.com/Play-Hireling/hireling/discussions)
+- **Bugs and feature requests:** [Issues](https://github.com/Play-Hireling/hireling/issues/new/choose)
+- **News, demos and build-in-public:** [playhireling.com](https://playhireling.com)
+
+If Hireling is useful to you, a ⭐ helps other people find it.
+
 ## Contributing
 
 Issues and pull requests are welcome — start with [CONTRIBUTING.md](CONTRIBUTING.md). Good first contributions: new hireling templates in `agents/`, docs, tests. Security reports go to [SECURITY.md](SECURITY.md), not to issues.
@@ -109,4 +134,4 @@ Hireling is **fair source**: free to use, read, modify and self-host.
 - `runtime/`, `services/egress/`, `services/gbrain/`, `services/ledger-writer/`, `agents/`, `ledger/`, scripts and docs: **[Apache-2.0](LICENSE)**.
 - `services/tavern-core/`: **[FSL-1.1-ALv2](services/tavern-core/LICENSE.md)** — use it for anything except offering a competing hosted service; each version becomes Apache-2.0 two years after release.
 
-"Hireling", the logo and the official game art are trademarks and are not covered by these licenses — see [TRADEMARKS.md](TRADEMARKS.md). Details in [LICENSING.md](LICENSING.md).
+"Hireling", the logo and the official game art (including the images in [`docs/assets/`](docs/assets/)) are trademarks and are not covered by these licenses — see [TRADEMARKS.md](TRADEMARKS.md). Details in [LICENSING.md](LICENSING.md).

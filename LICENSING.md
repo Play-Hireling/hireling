@@ -13,6 +13,7 @@ Hireling is **fair source**: the code is public, you can read it, run it, change
 | `agents/` (profiles and prompts) | [Apache-2.0](LICENSE) | Copy them into your own tavern freely |
 | `ledger/` (templates and seed brain) | [Apache-2.0](LICENSE) | Same |
 | `docs/`, `scripts/`, `bin/`, `compose.yaml` | [Apache-2.0](LICENSE) | Same |
+| `docs/assets/` (banner, screenshots, animation of the official game) | All rights reserved | Brand art shown in the README; not licensed for reuse — see [TRADEMARKS.md](TRADEMARKS.md) |
 | `services/tavern-core/` | [FSL-1.1-ALv2](services/tavern-core/LICENSE.md) | Any use except a competing commercial service; becomes Apache-2.0 two years after each release |
 
 A file's directory decides its license. A file that says otherwise in its header wins.
