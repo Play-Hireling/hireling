@@ -6,7 +6,7 @@ import (
 )
 
 // Rates are US$ per 1M tokens at peak hours. Source: DeepSeek pricing page
-// (https://api-docs.deepseek.com/quick_start/pricing, read 2026-11-03).
+// (https://api-docs.deepseek.com/quick_start/pricing, read 2026-11-03, re-checked 2026-11-05).
 // Off-peak is half of every rate.
 type Rates struct {
 	CacheHit  float64 // input tokens served from DeepSeek's prefix cache
@@ -55,6 +55,24 @@ func IsPeak(t time.Time) bool {
 	h := u.Hour()
 	return (h >= 1 && h < 4) || (h >= 6 && h < 10)
 }
+
+// OffPeakAt is when the next off-peak window starts: t itself when t is
+// already off-peak, otherwise the end of the current peak window (04:00 or
+// 10:00 UTC).
+func OffPeakAt(t time.Time) time.Time {
+	if !IsPeak(t) {
+		return t
+	}
+	u := t.UTC()
+	end := 4
+	if u.Hour() >= 6 {
+		end = 10
+	}
+	return time.Date(u.Year(), u.Month(), u.Day(), end, 0, 0, 0, time.UTC)
+}
+
+// Discounted reports whether model has DeepSeek's off-peak discount.
+func Discounted(model string) bool { return family(model) != "" }
 
 // RatesFor returns the rates in force for a DeepSeek model at t, and false
 // when the model has no known price (then cost stays 0 and Priced is false).

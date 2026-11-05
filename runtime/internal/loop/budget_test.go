@@ -10,6 +10,7 @@ import (
 	"github.com/Play-Hireling/hireling/runtime/internal/bar"
 	"github.com/Play-Hireling/hireling/runtime/internal/frontdesk"
 	"github.com/Play-Hireling/hireling/runtime/internal/tavern"
+	"github.com/redis/go-redis/v9"
 )
 
 // fakeBudget is tavern-core's budget and task reads.
@@ -142,4 +143,67 @@ type turnerFunc func(text string)
 func (f turnerFunc) Run(_ context.Context, text string) (string, error) {
 	f(text)
 	return "ok", nil
+}
+
+// D9: during DeepSeek's peak hours routines (P3) wait for off-peak, when
+// every token costs half; P0–P2 run at once. Not for a non-DeepSeek model.
+func TestRoutinesWaitForOffPeak(t *testing.T) {
+	ctx := context.Background()
+	_, h := newServer(t)
+	l := newLoop(h, &fakeTurner{})
+	l.Profile.Model = "deepseek-v4-flash"
+	l.TurnsDir = t.TempDir()
+	l.Bus = newBar(t, "test")
+	if err := l.Bus.EnsureGroup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	l.Budget = &fakeBudget{prio: map[string]string{"T-2": "P2", "T-3": "P3"}}
+	now := time.Date(2026, 11, 10, 7, 30, 0, 0, time.UTC) // Tuesday, peak 06:00–10:00
+	l.now = func() time.Time { return now }
+	sender := &bar.Bus{C: l.Bus.C, Agent: "innkeeper"}
+	for _, m := range []bar.Message{
+		{To: "test", Type: "request", Task: "T-3", Text: "weekly cleanup"},
+		{To: "test", Type: "request", Task: "T-2", Text: "handoff from the Dev"},
+	} {
+		if _, err := sender.Send(ctx, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	msgs, _ := l.Bus.Next(ctx, 100*time.Millisecond)
+	var ran []string
+	l.Turner = turnerFunc(func(text string) { ran = append(ran, text) })
+	l.handleBatch(ctx, msgs)
+	if len(ran) != 1 || !strings.Contains(ran[0], "handoff from the Dev") || len(l.held) != 1 {
+		t.Fatalf("peak: ran %v, held %d", ran, len(l.held))
+	}
+	ev, _ := l.Bus.C.XRange(ctx, bar.Events, "-", "+").Result()
+	if n := countKind(ev, "offpeak.deferred"); n != 1 {
+		t.Fatalf("offpeak.deferred events = %d", n)
+	}
+	l.handleBatch(ctx, nil) // idle tick, still peak
+	if len(ran) != 1 {
+		t.Fatal("a routine ran during peak hours")
+	}
+	now = time.Date(2026, 11, 10, 10, 0, 5, 0, time.UTC) // off-peak
+	l.handleBatch(ctx, nil)
+	if len(ran) != 2 || !strings.Contains(ran[1], "weekly cleanup") || len(l.held) != 0 {
+		t.Fatalf("off-peak: ran %v, held %d", ran, len(l.held))
+	}
+
+	// A hireling on another provider has no off-peak price: nothing waits.
+	l.Profile.Model = "anthropic/claude-sonnet"
+	now = time.Date(2026, 11, 10, 7, 30, 0, 0, time.UTC)
+	if r := l.holdReason(ctx, bar.Message{ID: "x", Task: "T-3"}); r != "" {
+		t.Fatalf("non-DeepSeek model held work: %q", r)
+	}
+}
+
+func countKind(ev []redis.XMessage, kind string) int {
+	n := 0
+	for _, e := range ev {
+		if e.Values["kind"] == kind {
+			n++
+		}
+	}
+	return n
 }

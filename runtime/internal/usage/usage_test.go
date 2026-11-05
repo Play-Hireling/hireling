@@ -167,3 +167,21 @@ func TestLatencies(t *testing.T) {
 		t.Fatal(l.String())
 	}
 }
+
+func TestOffPeakAt(t *testing.T) {
+	for in, want := range map[string]string{
+		"2026-11-10T02:15:00Z": "2026-11-10T04:00:00Z", // Tue, first peak window
+		"2026-11-10T07:30:00Z": "2026-11-10T10:00:00Z", // Tue, second
+		"2026-11-10T05:00:00Z": "2026-11-10T05:00:00Z", // between the windows
+		"2026-11-10T12:00:00Z": "2026-11-10T12:00:00Z", // afternoon
+		"2026-11-14T07:30:00Z": "2026-11-14T07:30:00Z", // Saturday
+	} {
+		at, _ := time.Parse(time.RFC3339, in)
+		if got := OffPeakAt(at).Format(time.RFC3339); got != want {
+			t.Errorf("OffPeakAt(%s) = %s, want %s", in, got, want)
+		}
+	}
+	if !Discounted("deepseek/deepseek-v4-pro") || !Discounted("deepseek-flash") || Discounted("anthropic/claude-sonnet") {
+		t.Fatal("Discounted")
+	}
+}
