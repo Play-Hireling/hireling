@@ -5,7 +5,7 @@
 # Build context is the repository root (compose.yaml sets it), so
 # the image carries agents/ — the profile is picked at run time by HIRELING_AGENT.
 
-FROM golang:1.24-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY runtime/go.mod runtime/go.sum ./
 RUN go mod download
