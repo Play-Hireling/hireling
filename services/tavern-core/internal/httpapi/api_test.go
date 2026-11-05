@@ -153,8 +153,15 @@ func TestUsage(t *testing.T) {
 	today := `{"command_id":"c2","totals":{"calls":1,"input_tokens":100,"output_tokens":50,"cost_usd":0.0001,"priced":true}}`
 	call(t, srv, "POST", "/agents/test/usage", "test", today, nil)
 	call(t, srv, "GET", "/agents/test/budget", "", "", &b)
-	if b["tokens_used"].(float64) != 150 || b["turns"].(float64) != 1 {
+	if b["tokens_used"].(float64) != 150 || b["turns"].(float64) != 1 || b["over_budget"] != false || b["resets_at"] != "2026-11-11T00:00:00Z" {
 		t.Fatalf("budget after a turn today: %v", b)
+	}
+	// D7: reaching tokens_per_day (50 000) flips over_budget.
+	big := `{"command_id":"c3","totals":{"calls":1,"input_tokens":49850,"output_tokens":0,"cost_usd":0.01,"priced":true}}`
+	call(t, srv, "POST", "/agents/test/usage", "test", big, nil)
+	call(t, srv, "GET", "/agents/test/budget", "", "", &b)
+	if b["tokens_used"].(float64) != 50000 || b["over_budget"] != true {
+		t.Fatalf("budget at the limit: %v", b)
 	}
 }
 

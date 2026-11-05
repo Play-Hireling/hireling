@@ -13,7 +13,7 @@ sprite: scriptwriter                 # sprite set in the game client
 planner: false                       # true for the one hireling that plans (the Innkeeper)
 
 budget:
-  tokens_per_day: 150000             # mana · recorded and reported per UTC day
+  tokens_per_day: 150000             # mana · per UTC day; over it only P0/P1 run
   web_calls_per_day: 200
 
 autonomy:
@@ -60,7 +60,7 @@ Lowercase slug (`a-z`, `0-9`, `-`). The id names the container (`agent-<id>`), t
 Marks the hireling whose answers may carry a `plan` block and who approves handoffs. Exactly one per tavern is the norm.
 
 ### `budget`
-`tokens_per_day` is the hireling's daily mana; every turn's usage is recorded against it and reported by `GET /agents/<id>/budget`. A hard stop at the limit is on the roadmap.
+`tokens_per_day` is the hireling's daily mana: every turn's usage is recorded against it and reported by `GET /agents/<id>/budget`. Once it is reached, the runtime runs only P0/P1 work (D7): your commands and answers, bar messages about P0/P1 tasks, and alerts. Any other bar message is held, unacked, and runs after 00:00 UTC. Set it to `0` for no budget.
 
 ### `autonomy`
 Action names are free-form slugs that prompts and the policy gate use. Rules enforced at load:

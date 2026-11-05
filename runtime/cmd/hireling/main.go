@@ -435,6 +435,7 @@ func build(logger *log.Logger) (*loop.Loop, error) {
 		Tavern:          tavernClient(p.ID),
 		Gate:            gateGrants(p.ID),
 		Asks:            askBook(p.ID),
+		Budget:          budgetReader(p.ID),
 		GateTurnFile:    filepath.Join(home, gate.TurnFile),
 		Bus:             bus,
 		Tasks:           tasks,
@@ -446,6 +447,15 @@ func build(logger *log.Logger) (*loop.Loop, error) {
 
 		DeskIDs: escIDs,
 	}, nil
+}
+
+// budgetReader reads today's token budget (D7); nil without TAVERN_URL.
+func budgetReader(agent string) loop.BudgetReader {
+	url := strings.TrimRight(os.Getenv("TAVERN_URL"), "/")
+	if url == "" {
+		return nil
+	}
+	return &tavern.Client{BaseURL: url, Agent: agent}
 }
 
 // askBook is tavern-core's book of asks (D11); nil without TAVERN_URL.
