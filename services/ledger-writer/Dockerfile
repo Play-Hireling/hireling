@@ -2,7 +2,7 @@
 # their author. Build context is the repository root: the code is the runtime
 # module (it shares the page validator and the profiles) and agents/ gives the
 # ledger.write areas.
-FROM golang:1.24-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY runtime/go.mod runtime/go.sum ./
 RUN go mod download
