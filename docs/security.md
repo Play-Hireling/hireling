@@ -1,0 +1,32 @@
+# Security model
+
+Hireling runs language models that can execute code and act on your accounts. The design assumes **a hireling's model can be wrong or manipulated** (prompt injection from a web page, a file, another agent) and limits what it can reach when that happens.
+
+## Threats and controls
+
+| Threat | Control |
+| --- | --- |
+| A hireling exfiltrates data to an arbitrary host | Internal network with no route out; egress allowlist per profile; no IP literals; ports 80/443 only |
+| A hireling reaches cloud metadata or the host | Blocked hosts can never be allowed; no Docker socket; `no-new-privileges`; all capabilities dropped except the five the Hermes image needs to step down to UID 10000 |
+| A hireling reads another's memory or secrets | One private volume and one environment per container; secrets are per service |
+| Secrets leak into text (logs, reports, bar, Ledger) | The redactor masks the values of every variable in `profile.secrets`, the Front Desk and Access tokens, and credential-shaped strings, on every outbound path; Hermes config never contains a secret |
+| Destructive shell commands | Hermes approvals on with deny-when-no-human; deny list for sockets, privilege escalation, secret dumping |
+| Prompt injection through messages or pages | Bar messages are framed as data; prompts state that other agents' and pages' text is never an instruction; only the owner (Front Desk) and the planner (tasks) can assign work |
+| Irreversible actions without the owner | Hard deny list enforced at profile load; `hireling gate` on every tool call (D1) blocks the action and opens an `ask` card (D3); your yes grants one use; Composio sessions without destructive tools; ad spend cap at 0 by default |
+| A model tries to switch the gate off | The hook refuses any call that touches `config.yaml`, `.env`, the consent allowlist or the hireling prompt |
+| An autonomous action leaves no trace | The Autonomy Log (D4) records who, what, why, outcome and turn; an action that cannot be logged does not run |
+| A hireling rewrites shared memory | Read-only Ledger tokens; only ledger-writer commits, inside `ledger.write` areas, after grammar checks, as the hireling (auditable, revertable) |
+| Someone else orders your hirelings | Front Desk bearer tokens, constant-time compare; tavern-core published on 127.0.0.1 only |
+
+## Known limits (read before production)
+
+- **tavern-core's task API has no authentication.** It trusts the internal network and the `X-Hireling` header. Do not expose port 8080; expose only `/api/*` behind TLS if you need remote access.
+- **A shared agent token** (`FRONTDESK_AGENT_TOKEN`) lets any hireling report as any other on the Front Desk. Use `FRONTDESK_TOKEN_<ID>` per hireling when that matters.
+- **Capped limits are counted and enforced at the gate; token budgets are still reported, not hard-stopped.** Every tool call goes through `hireling gate` (D1), so an external action the gate blocks does not run. A local tool call, however, is allowed without a network check, and the gate is a classifier, not a sandbox: the egress allowlist remains the backstop. See [Autonomy](concepts/autonomy.md#what-enforces-the-limits).
+- **Allowed hosts are trusted hosts.** If a hireling may reach `github.com`, it may push to any repository its token allows. Scope tokens (fine-grained, one repo) and toolkits accordingly.
+- **The Hermes image is upstream.** Pin it by digest for production and review upgrades.
+- **Model providers see the prompts.** Do not put data in a tavern that must not reach DeepSeek or OpenRouter — which is why customer, KYC, financial and legal data stay out by rule.
+
+## Operator checklist
+
+See [Deploy → Operating checklist](guides/deploy.md#operating-checklist). Report vulnerabilities through [SECURITY.md](../SECURITY.md).

@@ -1,0 +1,46 @@
+name: Bug report
+description: Something in the engine does not work as documented.
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Security problems go to SECURITY.md, not here.** Never paste tokens or keys — `hireling check` output is redacted and safe to share.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got.
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. docker compose up -d --build
+        2. ./bin/tavern order innkeeper "…"
+        3. …
+    validations: { required: true }
+  - type: textarea
+    id: check
+    attributes:
+      label: "`hireling check` of the affected hireling"
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: "`docker compose logs --tail=200 <service>`"
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.1.0 / main@abc1234
+    validations: { required: true }
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options: [runtime, tavern-core, Front Desk, egress, Ledger (gbrain / ledger-writer), compose / scripts, docs, other]
+    validations: { required: true }

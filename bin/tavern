@@ -1,0 +1,51 @@
+#!/usr/bin/env sh
+# tavern — the owner's command line for a Hireling tavern (the Front Desk API).
+#
+#   tavern status                      who is doing what, open decisions, conversations
+#   tavern order <hireling> "<text>"   give an order (the Innkeeper plans and delegates)
+#   tavern decisions                   what is waiting on you
+#   tavern choose <decision-id> "<option>"
+#   tavern quest                       the shared goal
+#   tavern tasks                       the task board
+#   tavern health
+#
+# Reads TAVERN_URL (default http://127.0.0.1:8080) and FRONTDESK_OWNER_TOKEN
+# (from the environment or ./.env). Output is JSON; pipe it to `jq` for colour.
+set -eu
+
+here=$(cd "$(dirname "$0")/.." && pwd)
+if [ -z "${FRONTDESK_OWNER_TOKEN:-}" ] && [ -f "$here/.env" ]; then
+  FRONTDESK_OWNER_TOKEN=$(sed -n 's/^FRONTDESK_OWNER_TOKEN=//p' "$here/.env" | tail -n1)
+fi
+url=${TAVERN_URL:-http://127.0.0.1:${TAVERN_PORT:-8080}}
+token=${FRONTDESK_OWNER_TOKEN:-}
+
+usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+
+# JSON-escape one argument (quotes, backslashes, newlines, tabs).
+js() { printf '%s' "$1" | awk 'BEGIN{ORS=""} {gsub(/\\/,"\\\\"); gsub(/"/,"\\\""); gsub(/\t/,"\\t"); if (NR>1) print "\\n"; print}'; }
+
+req() { # method path [body]
+  if [ $# -ge 3 ]; then
+    curl -sS -X "$1" -H "Authorization: Bearer $token" -H 'Content-Type: application/json' --data "$3" "$url$2"
+  else
+    curl -sS -X "$1" -H "Authorization: Bearer $token" "$url$2"
+  fi
+  echo
+}
+
+need_token() { [ -n "$token" ] || { echo "tavern: FRONTDESK_OWNER_TOKEN not set (run ./scripts/init-env.sh)" >&2; exit 1; }; }
+
+[ $# -ge 1 ] || usage
+cmd=$1; shift
+case "$cmd" in
+  status)    need_token; req GET /api/status ;;
+  order)     [ $# -ge 2 ] || usage; need_token; agent=$1; shift; req POST /api/command "{\"agent\":\"$(js "$agent")\",\"text\":\"$(js "$*")\"}" ;;
+  decisions) need_token; req GET /api/decisions ;;
+  choose)    [ $# -ge 2 ] || usage; need_token; id=$1; shift; req POST "/api/decisions/$id/choose" "{\"option\":\"$(js "$*")\"}" ;;
+  quest)     req GET /goal ;;
+  tasks)     req GET /tasks ;;
+  health)    req GET /healthz ;;
+  -h|--help|help) usage ;;
+  *) usage ;;
+esac

@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [runtime, services/tavern-core, services/egress]
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+      - name: gofmt
+        run: test -z "$(gofmt -l ${{ matrix.module }})" || (gofmt -l ${{ matrix.module }}; exit 1)
+      - name: vet
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...
+      - name: test
+        working-directory: ${{ matrix.module }}
+        run: go test -race ./...
+
+  images:
+    name: Build images
+    runs-on: ubuntu-latest
+    needs: go
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: runtime, file: runtime/Dockerfile }
+          - { name: tavern-core, file: services/tavern-core/Dockerfile }
+          - { name: egress, file: services/egress/Dockerfile }
+          - { name: ledger-writer, file: services/ledger-writer/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker build
+        run: docker build -f ${{ matrix.image.file }} -t hireling/${{ matrix.image.name }}:ci .
+
+  compose:
+    name: Compose file
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker compose config (every profile)
+        env:
+          DEEPSEEK_API_KEY: ci
+          FRONTDESK_OWNER_TOKEN: ci
+          FRONTDESK_AGENT_TOKEN: ci
+        run: docker compose --profile full --profile test --profile brain config --quiet
+
+  hygiene:
+    name: Docs, scripts and secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: relative links in markdown
+        run: python3 scripts/check-links.py
+      - name: shellcheck
+        run: shellcheck scripts/init-env.sh bin/tavern
+      - name: gitleaks
+        run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.21.2 detect --source /repo --redact --no-banner
+
+  dco:
+    name: DCO sign-off
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: every commit is signed off
+        run: |
+          base=${{ github.event.pull_request.base.sha }}
+          head=${{ github.event.pull_request.head.sha }}
+          missing=0
+          for c in $(git rev-list --no-merges "$base..$head"); do
+            if ! git log -1 --format=%B "$c" | grep -q '^Signed-off-by: '; then
+              echo "::error::commit $c has no Signed-off-by line (git commit --amend -s)"
+              missing=1
+            fi
+          done
+          exit $missing

@@ -1,0 +1,26 @@
+name: New hireling template
+description: Propose a role for agents/ (Researcher, Support drafter, Analyst…).
+labels: [hireling-template, good first issue]
+body:
+  - type: input
+    id: id
+    attributes:
+      label: Id
+      placeholder: researcher
+    validations: { required: true }
+  - type: textarea
+    id: job
+    attributes:
+      label: Job
+      description: What it does, what done looks like, who it works with.
+    validations: { required: true }
+  - type: textarea
+    id: autonomy
+    attributes:
+      label: Autonomy
+      description: free / capped (with limits) / owner_decides actions.
+  - type: textarea
+    id: network
+    attributes:
+      label: Hosts and toolkits it needs
+      description: network.allow and hands.toolkits — as few as possible.

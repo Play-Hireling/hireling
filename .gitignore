@@ -1,0 +1,10 @@
+.env
+*.env
+!.env.example
+/dist/
+*.test
+*.out
+.DS_Store
+.idea/
+.vscode/
+ledger/.obsidian/workspace*.json

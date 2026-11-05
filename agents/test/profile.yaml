@@ -1,0 +1,47 @@
+# test — the smoke-test hireling: one container that reports turns to the
+# front desk and reads its own command queue. Schema: docs/reference/profile.md.
+id: test
+display_name_key: agent.test        # UI string key (the game client translates it)
+model: deepseek-v4-flash            # A2: deepseek-v4-flash | deepseek-v4-pro
+home_server: local
+region: ""
+sprite: dev
+
+budget:
+  tokens_per_day: 50000
+  web_calls_per_day: 20
+
+autonomy:
+  free: [draft, research, write_shared_file, message_agent]
+  capped: {}
+  # D5: these are always the owner's, whatever the profile says. tavern-core
+  # re-adds them if a profile forgets them.
+  owner_decides: [payment, contract, customer_data, delete, production_critical]
+
+tools: [files]
+
+# A8: hosts this role may reach through the egress proxy, besides the base
+# list every hireling gets (api.deepseek.com, openrouter.ai, the front desk).
+# A subdomain matches its parent. The test hireling needs nothing else.
+network:
+  allow: []
+
+# A12: Composio toolkits whose accounts (connected once per tavern) this role may use.
+hands:
+  toolkits: [github]
+
+# Names only. Values are environment variables of the service (G4).
+secrets: [DEEPSEEK_API_KEY, FRONTDESK_TOKEN_TEST, OPENROUTER_API_KEY, COMPOSIO_API_KEY]
+
+ledger:
+  read: []
+  write: [learnings/test/*]
+
+# fallback:                        # default: same model on OpenRouter when OPENROUTER_API_KEY is set
+#   model: deepseek/deepseek-v4-pro
+#   disabled: false
+
+runtime:
+  poll_seconds: 20                  # how often to read the front desk queue (A4)
+  turn_ttl_minutes: 15              # how long a silent turn stays alive on the front desk (A3)
+  screen: code

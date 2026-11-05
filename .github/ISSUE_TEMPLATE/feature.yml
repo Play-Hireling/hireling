@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a change to the engine.
+labels: [enhancement, triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What can't you do today, or what is painful? Start from the job, not the solution.
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How it could work. Which component, which API or profile field.
+  - type: textarea
+    id: limits
+    attributes:
+      label: Autonomy and security impact
+      description: Does it give hirelings a new capability? What stops it from being misused?
+  - type: checkboxes
+    id: roadmap
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the issues and the roadmap (docs/roadmap.md).
+          required: true

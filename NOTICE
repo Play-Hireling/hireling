@@ -1,0 +1,8 @@
+Hireling
+Copyright 2026 Pedro Magalhães and the Hireling contributors
+
+This product includes software developed by the Hireling contributors
+(https://github.com/Play-Hireling/hireling).
+
+The hireling container image is built on Hermes Agent by Nous Research
+(nousresearch/hermes-agent), which is distributed under its own license.

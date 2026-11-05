@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake credentials used by the redaction tests"
+paths = ['''redact_test\.go''']

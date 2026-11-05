@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /runtime
+    schedule: { interval: weekly }
+  - package-ecosystem: gomod
+    directory: /services/tavern-core
+    schedule: { interval: weekly }
+  - package-ecosystem: gomod
+    directory: /services/egress
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directories: [/runtime, /services/tavern-core, /services/egress, /services/gbrain, /services/ledger-writer]
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

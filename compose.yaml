@@ -1,0 +1,293 @@
+# Hireling — a tavern in a box.
+#
+#   cp .env.example .env && ./scripts/init-env.sh   # writes random Front Desk tokens
+#   $EDITOR .env                                    # paste DEEPSEEK_API_KEY
+#   docker compose up -d --build                    # Innkeeper + Scriptwriter + Dev
+#   ./bin/tavern order innkeeper "Plan a launch post for our new feature"
+#
+# Optional Compose profiles (COMPOSE_PROFILES=full,brain or --profile …):
+#   full   adds Social Media and Paid Traffic
+#   test   adds the smoke-test hireling
+#   brain  adds the Tavern Ledger: Postgres + GBrain (MCP) + ledger-writer
+#
+# Security model (docs/security.md): hirelings live on the internal `tavern`
+# network and have no route out; the only door is `egress`, which lets each
+# hireling reach exactly the hosts in its profile. Only tavern-core publishes a
+# port, and only on 127.0.0.1.
+
+name: hireling
+
+x-proxy-env: &proxy-env
+  HTTP_PROXY: http://egress:3128
+  HTTPS_PROXY: http://egress:3128
+  http_proxy: http://egress:3128
+  https_proxy: http://egress:3128
+  NO_PROXY: tavern-core,redis,egress,gbrain,ledger-writer,localhost,127.0.0.1
+  no_proxy: tavern-core,redis,egress,gbrain,ledger-writer,localhost,127.0.0.1
+  # Turns go through Hermes' warm API server; on a fresh volume it must be told to start.
+  HERMES_GATEWAY_BOOTSTRAP_STATE: running
+
+x-hireling-env: &hireling-env
+  <<: *proxy-env
+  HERMES_HOME: /opt/data
+  HIRELING_SERVER: ${HIRELING_SERVER:-local}
+  HIRELING_REGION: ${HIRELING_REGION:-}
+  TAVERN_URL: http://tavern-core:8080
+  REDIS_URL: redis://redis:6379/0
+  FRONTDESK_URL: http://tavern-core:8080
+  FRONTDESK_AGENT_TOKEN: ${FRONTDESK_AGENT_TOKEN:?run ./scripts/init-env.sh}
+  LEDGER_WRITER_URL: http://ledger-writer:8090
+  DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?paste your DeepSeek key in .env}
+  OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+  COMPOSIO_API_KEY: ${COMPOSIO_API_KEY:-}
+  COMPOSIO_USER_ID: ${COMPOSIO_USER_ID:-hireling-tavern}
+
+x-hireling: &hireling
+  build:
+    context: .
+    dockerfile: runtime/Dockerfile
+  image: hireling/runtime:${HIRELING_TAG:-local}
+  restart: unless-stopped
+  networks: [tavern]
+  depends_on:
+    redis: { condition: service_healthy }
+    tavern-core: { condition: service_healthy }
+    egress: { condition: service_healthy }
+    tavern-init: { condition: service_completed_successfully }
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  # The Hermes image starts under s6 as root and steps down to UID 10000; these
+  # five capabilities are the minimum for that step-down and the volume chown.
+  cap_add: [SETUID, SETGID, CHOWN, DAC_OVERRIDE, FOWNER]
+  tmpfs: ["/tmp:size=256m"]
+  deploy:
+    resources:
+      limits: { cpus: "0.50", memory: 512M }
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  # The bar: Redis Streams for messages and events, plus tavern-core's state.
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    restart: unless-stopped
+    networks:
+      tavern:
+        aliases: [redis]
+    volumes: ["redis-data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 192M }
+
+  # Tasks, leases, budgets, the quest, the policy gate and the Front Desk.
+  tavern-core:
+    build:
+      context: .
+      dockerfile: services/tavern-core/Dockerfile
+    image: hireling/tavern-core:${HIRELING_TAG:-local}
+    restart: unless-stopped
+    networks: [tavern, desk]
+    ports: ["127.0.0.1:${TAVERN_PORT:-8080}:8080"]
+    depends_on:
+      redis: { condition: service_healthy }
+    environment:
+      TAVERN_ADDR: ":8080"
+      TAVERN_AGENTS_DIR: /agents
+      REDIS_URL: redis://redis:6379/0
+      FRONTDESK_OWNER_TOKEN: ${FRONTDESK_OWNER_TOKEN:?run ./scripts/init-env.sh}
+      FRONTDESK_AGENT_TOKEN: ${FRONTDESK_AGENT_TOKEN:?run ./scripts/init-env.sh}
+      GOAL_TITLE: ${GOAL_TITLE:-}
+      GOAL_TARGET: ${GOAL_TARGET:-0}
+      GOAL_CURRENCY: ${GOAL_CURRENCY:-USD}
+      GOAL_SOURCE: ${GOAL_SOURCE:-owner}
+      GOAL_KINDS: ${GOAL_KINDS:-}
+      GOAL_PERIOD: ${GOAL_PERIOD:-}
+    healthcheck:
+      test: ["CMD", "/tavern-core", "-healthcheck"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    read_only: true
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 128M }
+
+  # The tavern's only door to the internet: per-hireling host allowlist.
+  egress:
+    build:
+      context: .
+      dockerfile: services/egress/Dockerfile
+    image: hireling/egress:${HIRELING_TAG:-local}
+    restart: unless-stopped
+    networks: [tavern, outside]
+    environment:
+      EGRESS_ADDR: ":3128"
+      EGRESS_AGENTS_DIR: /agents
+    healthcheck:
+      test: ["CMD", "/egress", "-healthcheck"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    read_only: true
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 64M }
+
+  # Named volumes are created root-owned; hirelings run as UID 10000.
+  tavern-init:
+    image: busybox:1.37
+    command: ["sh", "-c", "chown -R 10000:10000 /tavern/shared && chmod 0775 /tavern/shared && chown 10001:10001 /tokens && echo ready"]
+    networks: [tavern]
+    volumes: ["tavern-shared:/tavern/shared", "gbrain-tokens:/tokens"]
+    restart: "no"
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]
+
+  # ---- The party. Copy a block to add a hireling (docs/guides/add-a-hireling.md).
+  agent-innkeeper:
+    <<: *hireling
+    environment:
+      <<: *hireling-env
+      HIRELING_AGENT: innkeeper
+    volumes: ["tavern-innkeeper:/opt/data", "tavern-shared:/tavern/shared", "gbrain-tokens:/run/gbrain:ro"]
+
+  agent-scriptwriter:
+    <<: *hireling
+    environment:
+      <<: *hireling-env
+      HIRELING_AGENT: scriptwriter
+    volumes: ["tavern-scriptwriter:/opt/data", "tavern-shared:/tavern/shared", "gbrain-tokens:/run/gbrain:ro"]
+
+  agent-dev:
+    <<: *hireling
+    environment:
+      <<: *hireling-env
+      HIRELING_AGENT: dev
+    volumes: ["tavern-dev:/opt/data", "tavern-shared:/tavern/shared", "gbrain-tokens:/run/gbrain:ro"]
+
+  agent-social-media:
+    <<: *hireling
+    profiles: [full]
+    environment:
+      <<: *hireling-env
+      HIRELING_AGENT: social-media
+    volumes: ["tavern-social-media:/opt/data", "tavern-shared:/tavern/shared", "gbrain-tokens:/run/gbrain:ro"]
+
+  agent-paid-traffic:
+    <<: *hireling
+    profiles: [full]
+    environment:
+      <<: *hireling-env
+      HIRELING_AGENT: paid-traffic
+    volumes: ["tavern-paid-traffic:/opt/data", "tavern-shared:/tavern/shared", "gbrain-tokens:/run/gbrain:ro"]
+
+  agent-test:
+    <<: *hireling
+    profiles: [test]
+    environment:
+      <<: *hireling-env
+      HIRELING_AGENT: test
+    volumes: ["tavern-test:/opt/data", "tavern-shared:/tavern/shared"]
+
+  # ---- The Tavern Ledger (profile `brain`): shared memory with keyword search.
+  ledger-db:
+    image: pgvector/pgvector:pg17
+    profiles: [brain]
+    restart: unless-stopped
+    networks: [tavern]
+    environment:
+      POSTGRES_USER: gbrain
+      POSTGRES_PASSWORD: ${LEDGER_DB_PASSWORD:-change-me}
+      POSTGRES_DB: gbrain
+    volumes: ["ledger-db:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gbrain"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  gbrain:
+    build:
+      context: .
+      dockerfile: services/gbrain/Dockerfile
+    image: hireling/gbrain:${HIRELING_TAG:-local}
+    profiles: [brain]
+    restart: unless-stopped
+    depends_on:
+      ledger-db: { condition: service_healthy }
+      tavern-init: { condition: service_completed_successfully }
+    # `outside` lets it clone and pull the brain repo from your git host.
+    networks: [tavern, outside]
+    environment:
+      GBRAIN_DATABASE_URL: postgres://gbrain:${LEDGER_DB_PASSWORD:-change-me}@ledger-db:5432/gbrain
+      LEDGER_REPO_URL: ${LEDGER_REPO_URL:-}
+      LEDGER_GIT_TOKEN: ${LEDGER_GIT_TOKEN:-}
+      LEDGER_SYNC_SECONDS: ${LEDGER_SYNC_SECONDS:-120}
+      GBRAIN_ADMIN_BOOTSTRAP_TOKEN: ${GBRAIN_ADMIN_BOOTSTRAP_TOKEN:-}
+      GBRAIN_SWEEP: "0"
+      HIRELING_LEDGER_READERS: innkeeper scriptwriter social-media dev paid-traffic
+    volumes: ["gbrain-data:/data", "gbrain-ledger:/ledger", "gbrain-tokens:/tokens"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3131/health?deep=1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+
+  ledger-writer:
+    build:
+      context: .
+      dockerfile: services/ledger-writer/Dockerfile
+    image: hireling/ledger-writer:${HIRELING_TAG:-local}
+    profiles: [brain]
+    restart: unless-stopped
+    networks: [tavern, outside]
+    environment:
+      LEDGER_REPO_URL: ${LEDGER_REPO_URL:-}
+      LEDGER_GIT_TOKEN: ${LEDGER_GIT_TOKEN:-}
+    volumes: ["ledger-writer:/repo"]
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/ledger-writer", "-healthcheck"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+
+networks:
+  tavern:
+    internal: true   # no route out; everything external goes through `egress`
+  outside: {}        # egress (and the brain's git sync) only
+  desk: {}           # lets tavern-core publish 127.0.0.1:8080 for the owner
+
+volumes:
+  redis-data:
+  tavern-shared:
+  tavern-innkeeper:
+  tavern-scriptwriter:
+  tavern-dev:
+  tavern-social-media:
+  tavern-paid-traffic:
+  tavern-test:
+  ledger-db:
+  gbrain-data:
+  gbrain-ledger:
+  gbrain-tokens:
+  ledger-writer:

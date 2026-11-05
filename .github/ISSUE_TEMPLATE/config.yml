@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/Play-Hireling/hireling/discussions
+    about: Ask and discuss in GitHub Discussions.
+  - name: Security vulnerability
+    url: https://github.com/Play-Hireling/hireling/security/advisories/new
+    about: Report privately — never in a public issue.
+  - name: Hosted Hireling and commercial terms
+    url: https://playhireling.com
+    about: Early access to Hireling Cloud.

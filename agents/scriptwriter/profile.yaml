@@ -1,0 +1,38 @@
+# scriptwriter — starter party. Schema: docs/reference/profile.md.
+id: scriptwriter
+display_name_key: agent.scriptwriter
+model: deepseek-v4-flash
+home_server: local
+region: ""
+sprite: scriptwriter
+
+budget:
+  tokens_per_day: 150000
+  web_calls_per_day: 200
+
+autonomy:
+  free: [draft, research, write_shared_file, message_agent]
+  capped: { publish_draft_to_cms: { per_day: 3 } }
+  owner_decides: [payment, contract, customer_data, delete, production_critical]
+
+tools: [files]
+
+# Names only. Values are environment variables of the service (G4).
+secrets: [DEEPSEEK_API_KEY, FRONTDESK_TOKEN_SCRIPTWRITER, OPENROUTER_API_KEY, COMPOSIO_API_KEY]
+
+# A8: hosts this role may reach through the egress proxy, besides the base list.
+network:
+  allow: []
+
+# A12: Composio toolkits whose accounts (connected once per tavern) this role may use.
+hands:
+  toolkits: [googledocs, googledrive]
+
+ledger:
+  read: [goal, learnings/*, projects/*]
+  write: [learnings/scriptwriter/*]
+
+runtime:
+  poll_seconds: 20
+  turn_ttl_minutes: 15
+  screen: code
