@@ -1,7 +1,7 @@
 # egress image (A8): the tavern's forward proxy. Build context is the repository
 # root (it needs runtime/ for the shared profile package and agents/ for the
 # allowlists).
-FROM golang:1.24-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY runtime/go.mod runtime/go.sum ./runtime/
 COPY services/egress/go.mod services/egress/go.sum ./services/egress/
