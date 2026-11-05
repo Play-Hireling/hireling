@@ -137,3 +137,24 @@ func TestParseLedger(t *testing.T) {
 		t.Fatal("more than MaxLedgerPages accepted")
 	}
 }
+
+// D11: the ask names its gate action and says why the first option is the
+// recommendation.
+func TestAskActionAndWhy(t *testing.T) {
+	a, _, err := ParseAsk("```ask\n{\"question\": \"Merge PR #7?\", \"options\": [\"Merge it\", \"Not now\"], \"why\": \"  CI green,\\n reviewed \", \"action\": \" Merge_PR \"}\n```")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Action != "merge_pr" || a.Why != "CI green, reviewed" || a.Recommendation() != "Recommended: Merge it — CI green, reviewed" {
+		t.Fatalf("%+v %q", a, a.Recommendation())
+	}
+	if _, _, err := ParseAsk("```ask\n{\"question\": \"q\", \"options\": [\"a\", \"b\"], \"action\": \"rm -rf\"}\n```"); err == nil {
+		t.Fatal("an action that is not a profile name passed")
+	}
+	if _, _, err := ParseAsk("```ask\n{\"question\": \"q\", \"options\": [\"a\", \"b\"], \"why\": \"" + strings.Repeat("x", MaxWhy+1) + "\"}\n```"); err == nil {
+		t.Fatal("a long why passed")
+	}
+	if a, _, _ := ParseAsk("```ask\n{\"question\": \"q\", \"options\": [\"a\", \"b\"]}\n```"); a.Recommendation() != "" {
+		t.Fatal("no why, no recommendation line")
+	}
+}

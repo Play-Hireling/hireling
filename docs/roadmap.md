@@ -3,7 +3,7 @@
 What is coming to the open engine, roughly in order. Dates are intentions, not promises. Follow progress in GitHub issues and milestones; propose changes in Discussions.
 
 ## Now — make the box delightful
-- **Autonomy gate** (D1) on every tool call, **capped limits counted per day or week** (D2) and the **Autonomy Log** (D4) with who, what, why and turn cost.
+- **Autonomy gate** (D1) on every tool call, **capped limits counted per day or week** (D2) and the **Autonomy Log** (D4) with who, what, why and turn cost; **autonomy first** (D11): an ask about the hireling's own action goes back to it, one card per task.
 - **Tavern MCP server**: orders, status, decisions, tasks and the quest as MCP tools/resources, so MCP clients (Claude Code and others) manage a tavern without the shell.
 - **Streaming answers** to the Front Desk (A13): first words in under a second.
 - **Plain-art game client** in the box: watch the party work at `http://127.0.0.1:8080/` (the official art stays with the hosted game).

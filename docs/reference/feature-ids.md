@@ -58,7 +58,7 @@ Code comments and docs refer to features by short ids (`A5`, `B11`, …). This i
 | D7 | Token budget enforced (over budget → only P0/P1) | 🟡 recorded and reported |
 | D8 | Web-call budget | 🗺 |
 | D9 | Off-peak scheduling | 🗺 |
-| D11 | Autonomy first: ask only what is the owner's | 🗺 |
+| D11 | Autonomy first: ask only what is the owner's | ✅ |
 
 ## E — The Ledger
 

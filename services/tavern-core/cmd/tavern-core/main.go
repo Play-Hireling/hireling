@@ -24,6 +24,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Play-Hireling/hireling/services/tavern-core/internal/asks"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/autonomy"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/frontdesk"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/goal"
@@ -72,6 +73,7 @@ func main() {
 	var quest goal.Store = goal.NewMemory()
 	var grants policy.Grants = policy.NewMemoryGrants()
 	var autoLog autonomy.Store = autonomy.NewMemory()
+	var askBook asks.Store = asks.NewMemory()
 	var persist frontdesk.Persister
 	ready := func() error { return nil }
 	if url := os.Getenv("REDIS_URL"); url != "" {
@@ -90,6 +92,7 @@ func main() {
 		quest = &goal.Redis{C: c}
 		grants = &policy.RedisGrants{C: c}
 		autoLog = &autonomy.Redis{C: c}
+		askBook = &asks.Redis{C: c}
 		persist = &frontdesk.Redis{C: c}
 		ready = func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -124,7 +127,7 @@ func main() {
 	if desk.OwnerToken == "" {
 		logger.Printf("FRONTDESK_OWNER_TOKEN unset: owner endpoints are closed")
 	}
-	srv := &httpapi.Server{Gate: gate, Tasks: queue, Usage: spent, Goal: quests, Grants: grants, Log: autoLog, Ready: ready, Extra: desk.Register}
+	srv := &httpapi.Server{Gate: gate, Tasks: queue, Usage: spent, Goal: quests, Grants: grants, Log: autoLog, Asks: askBook, Ready: ready, Extra: desk.Register}
 	hs := &http.Server{
 		Addr:              env("TAVERN_ADDR", ":8080"),
 		Handler:           srv.Handler(),
