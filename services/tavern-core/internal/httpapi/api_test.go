@@ -570,3 +570,52 @@ func TestAutonomyFirstAsks(t *testing.T) {
 		t.Fatalf("stats: %+v", st)
 	}
 }
+
+// D8: web_call is counted per UTC day against web_calls_per_day; past it the
+// level is "budget" (not the owner's) and the block lands in the Autonomy Log.
+func TestWebCallBudget(t *testing.T) {
+	p := &profile.Profile{ID: "dev", Model: "deepseek-v4-flash"}
+	p.Budget.WebCallsPerDay = 2
+	p.Autonomy.OwnerDecides = profile.HardDeny
+	now := time.Date(2026, 11, 5, 23, 0, 0, 0, time.UTC)
+	log := autonomy.NewMemory()
+	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(),
+		Grants: policy.NewMemoryGrants(), Log: log, Now: func() time.Time { return now }}
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+	web := func(use bool) policy.Decision {
+		var d policy.Decision
+		body := `{"action":"web_call","target":"web_search canva"}`
+		if use {
+			body = `{"action":"web_call","target":"web_search canva","use":true,"turn":"c-1"}`
+		}
+		call(t, srv, "POST", "/actions/check", "dev", body, &d)
+		return d
+	}
+	if d := web(false); d.Level != policy.Free || d.Counted || d.Used != 0 {
+		t.Fatalf("dry check: %+v", d)
+	}
+	for i := 1; i <= 2; i++ {
+		if d := web(true); d.Level != policy.Free || !d.Counted || d.Used != i || d.Limit != 2 {
+			t.Fatalf("call %d: %+v", i, d)
+		}
+	}
+	d := web(true)
+	if d.Level != policy.Budget || !strings.Contains(d.Reason, "2/2") {
+		t.Fatalf("third call: %+v", d)
+	}
+	var b map[string]any
+	call(t, srv, "GET", "/agents/dev/budget", "", "", &b)
+	if b["web_calls_used"].(float64) != 2 {
+		t.Fatalf("budget: %v", b)
+	}
+	entries, _ := log.List(context.Background(), "2026-11-05", "", 10)
+	if len(entries) != 1 || entries[0].Outcome != "blocked" || entries[0].Level != "budget" {
+		t.Fatalf("log: %+v (only the blocked call is logged)", entries)
+	}
+	// The next UTC day starts again.
+	now = now.Add(2 * time.Hour)
+	if d := web(true); d.Level != policy.Free || d.Used != 1 {
+		t.Fatalf("next day: %+v", d)
+	}
+}

@@ -24,7 +24,6 @@ func TestClassifyLocal(t *testing.T) {
 		input map[string]any
 	}{
 		{"read_file", map[string]any{"path": "/opt/data/config.yaml"}}, // reading is local
-		{"web_search", map[string]any{"query": "canva api 502"}},
 		{"kanban_list", nil},
 		{"write_file", map[string]any{"path": "notes/plan.md"}},
 		{"write_file", map[string]any{"path": "/tavern/shared/repo/config.yaml"}}, // a project's own config
@@ -305,5 +304,29 @@ func TestHookSendsLogContext(t *testing.T) {
 	f2 := &fake{answers: map[string]Decision{"open_pr": {Level: "free"}}}
 	if o := (&Hook{Agent: "dev", Home: t.TempDir(), Checker: f2}).Decide(context.Background(), Payload{Tool: "terminal", Input: map[string]any{"command": "gh pr create"}}); !o.Allow || f2.ctx[0].Turn != "" {
 		t.Fatalf("no turn file: %+v %+v", o, f2.ctx)
+	}
+}
+
+// D8: web_search and web_extract are web calls, counted against the day's
+// budget; a spent budget blocks without sending the hireling to the owner.
+func TestWebCallBudget(t *testing.T) {
+	v := Classify("web_search", map[string]any{"query": "canva api 502"}, home)
+	if v.Kind != External || len(v.Actions) != 1 || v.Actions[0] != (Act{Action: WebCall, Target: "web_search canva api 502"}) {
+		t.Fatalf("web_search: %+v", v)
+	}
+	v = Classify("web_extract", map[string]any{"urls": []any{"https://a.example/x", "https://b.example/y"}}, home)
+	if v.Kind != External || v.Actions[0].Target != "web_extract https://a.example/x (+1)" {
+		t.Fatalf("web_extract: %+v", v)
+	}
+	ctx := context.Background()
+	f := &fake{answers: map[string]Decision{WebCall: {Level: "free", Counted: true, Used: 3, Limit: 20}}}
+	h := &Hook{Agent: "dev", Home: "/opt/data", Checker: f}
+	if o := h.Decide(ctx, Payload{Tool: "web_search", Input: map[string]any{"query": "x"}}); !o.Allow || f.asked[0] != WebCall {
+		t.Fatalf("within the budget: %+v %v", o, f.asked)
+	}
+	f.answers[WebCall] = Decision{Level: "budget", Reason: "daily web-call budget reached (D8): 20/20, resets at 00:00 UTC"}
+	o := h.Decide(ctx, Payload{Tool: "web_extract", Input: map[string]any{"url": "https://a.example"}})
+	if o.Allow || !strings.Contains(o.Message, "20/20") || !strings.Contains(o.Message, "do not ask the owner") || strings.Contains(o.Message, "`ask` block") {
+		t.Fatalf("over the budget: %+v", o)
 	}
 }

@@ -24,6 +24,9 @@ const (
 	Free   Level = "free"
 	Capped Level = "capped"
 	Owner  Level = "owner"
+	// Budget is D8: the hireling's daily web-call budget is spent. Not an
+	// approval for the owner — the call waits for the next UTC day.
+	Budget Level = "budget"
 )
 
 // SensitiveSystems is D6 (the list lives in runtime/profile, shared with the

@@ -14,6 +14,7 @@ package gate
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -50,8 +51,8 @@ type Verdict struct {
 var localTools = map[string]bool{
 	"read_file": true, "search_files": true, "session_search": true, "memory": true,
 	"todo": true, "todo_list": true, "skill_view": true, "skills_list": true, "skill_manage": true,
-	"clarify": true, "delegate_task": true, "vision_analyze": true, "web_search": true,
-	"web_extract": true, "process_manage": true, "text_to_speech": true, "image_generate": true,
+	"clarify": true, "delegate_task": true, "vision_analyze": true,
+	"process_manage": true, "text_to_speech": true, "image_generate": true,
 }
 
 // Env is where the call runs: Hermes' home (HERMES_HOME) and the tool's cwd.
@@ -111,6 +112,9 @@ func Classify(tool string, input map[string]any, e Env) Verdict {
 	switch {
 	case localTools[lt] || strings.HasPrefix(lt, "kanban_"):
 		return Verdict{Kind: Local}
+	case lt == "web_search" || lt == "web_extract":
+		// D8: a read of the web, counted against the day's web-call budget.
+		return Verdict{Kind: External, Actions: []Act{{Action: WebCall, Target: webTarget(lt, input)}}}
 	case lt == "write_file" || lt == "patch":
 		if controlPath(str(input, "path", "file_path", "filename"), e) {
 			return Verdict{Kind: Refuse, Reason: "the Hermes config and the gate's hook are not editable by a hireling"}
@@ -378,4 +382,26 @@ func Command(cmd string) []Act {
 		acts = append(acts, Act{Action: "publish_package", Target: short})
 	}
 	return acts
+}
+
+// WebCall is the gate action for Hermes' web_search and web_extract (D8).
+const WebCall = "web_call"
+
+// webTarget is what the Autonomy Log shows for a blocked web call.
+func webTarget(tool string, input map[string]any) string {
+	t := str(input, "query", "q", "url")
+	if t == "" {
+		if l, ok := input["urls"].([]any); ok && len(l) > 0 {
+			if u, ok := l[0].(string); ok {
+				t = u
+				if len(l) > 1 {
+					t += fmt.Sprintf(" (+%d)", len(l)-1)
+				}
+			}
+		}
+	}
+	if r := []rune(t); len(r) > 200 {
+		t = string(r[:199]) + "…"
+	}
+	return strings.TrimSpace(tool + " " + t)
 }
