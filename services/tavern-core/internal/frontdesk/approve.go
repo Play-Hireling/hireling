@@ -28,13 +28,13 @@ var (
 	// ErrBadAction means an action's name is not a plain name: the names go
 	// verbatim into the line the owner reads, so a line break or prose could
 	// forge a second line.
-	ErrBadAction      = errors.New("frontdesk: an action name is a-z, 0-9 and _ . : - (at most 64 characters)")
+	ErrBadAction      = errors.New("frontdesk: an action name is a-z, 0-9 and _ . : - (at most 128 characters)")
 	ErrNotAffirmative = errors.New("frontdesk: the decision offers no yes (Approve, Yes, OK …) to grant on")
 )
 
 // actionName is what a card's action may be called: the gate's own names
 // (lower-cased tool and action names), nothing that could add a line.
-var actionName = regexp.MustCompile(`^[a-z0-9_.:-]{1,64}$`)
+var actionName = regexp.MustCompile(`^[a-z0-9_.:-]{1,128}$`)
 
 // plainYes is an option that is a yes and nothing else ("Approve", "Yes.",
 // "OK!", "Go ahead"): the option that grants. An option that only starts

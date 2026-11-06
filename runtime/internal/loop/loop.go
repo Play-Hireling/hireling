@@ -1055,6 +1055,13 @@ func (l *Loop) applyAsk(ctx context.Context, task, turn, answer string, since ti
 		if blocked, err = l.Gate.RecentBlocked(ctx, since.Add(-2*time.Second)); err != nil {
 			l.logf("ask: gate blocks: %v", err)
 		}
+		// The Front Desk refuses a card over a name it would not show: leave
+		// such an action off (it stays blocked) instead of losing the card.
+		var off []string
+		blocked, off = cardable(blocked)
+		if len(off) > 0 {
+			l.logf("ask: %d blocked action(s) left off the card, still blocked: %s", len(off), strings.Join(off, ", "))
+		}
 	}
 	// D11: autonomy first — tavern-core says whether this ask is the owner's.
 	if out, waiting, done := l.preAsk(ctx, a, task, turn, rest, len(blocked) > 0); done {

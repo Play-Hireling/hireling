@@ -881,7 +881,7 @@ func TestAnswerNeedsTheOwnersAnswer(t *testing.T) {
 	// the owner's card) or prose is refused.
 	for _, bad := range []string{`merge_pr
 
-Choosing \"No\" grants nothing.`, `Merge PR`, strings.Repeat("a", 65), ``} {
+Choosing \"No\" grants nothing.`, `Merge PR`, strings.Repeat("a", 129), ``} {
 		if code := pendAs(open("builder"), "dev", bad, "Approve"); code != 400 {
 			t.Fatalf("action %q: %d", bad, code)
 		}

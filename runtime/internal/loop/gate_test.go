@@ -132,3 +132,12 @@ func TestWithYes(t *testing.T) {
 		}
 	}
 }
+
+// A blocked action whose name the Front Desk would refuse is left off the
+// card, so the card can still carry the rest.
+func TestCardableLeavesOffUnfitNames(t *testing.T) {
+	keep, off := cardable([]GateAct{{Action: strings.Repeat("x", 129)}, {Action: "merge_pr"}, {Action: "Bad Name"}})
+	if len(keep) != 1 || keep[0].Action != "merge_pr" || len(off) != 2 {
+		t.Fatalf("keep %v off %v", keep, off)
+	}
+}

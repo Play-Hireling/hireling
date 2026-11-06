@@ -28,6 +28,23 @@ type GateGrants interface {
 // same): the card is granted on the first such option.
 var yesWord = regexp.MustCompile(`(?i)^\s*(approve|approved|yes|ok|okay|go|go ahead|do it|allow|confirm)\s*[.!]?\s*$`)
 
+// cardName is an action name the Front Desk accepts on a card
+// (frontdesk.actionName in tavern-core: keep the two the same).
+var cardName = regexp.MustCompile(`^[a-z0-9_.:-]{1,128}$`)
+
+// cardable splits the blocked actions into those a card can carry and the
+// names it cannot.
+func cardable(acts []GateAct) (keep []GateAct, off []string) {
+	for _, a := range acts {
+		if cardName.MatchString(a.Action) {
+			keep = append(keep, a)
+		} else {
+			off = append(off, a.Action)
+		}
+	}
+	return keep, off
+}
+
 // withYes makes sure a card that carries blocked actions offers a plain yes:
 // without one tavern-core refuses the card and the owner's answer could grant
 // nothing. "Approve" is added (in place of the last option when all six are
