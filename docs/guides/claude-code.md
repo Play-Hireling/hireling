@@ -37,6 +37,6 @@ Give it the context once (or put it in a `CLAUDE.md` in your working copy):
 - **Decisions are explicit objects** with ids and options, so an agent can present them to you instead of guessing.
 - **The tavern's own limits still apply.** Whatever Claude Code does through `bin/tavern`, a hireling still can't reach a host outside its profile or skip the hard deny list.
 
-## Coming next
+## Prefer MCP?
 
-A **Tavern MCP server** (orders, status, decisions, tasks and the quest as MCP tools and resources) so MCP clients can manage a tavern without the shell. Track it in the [roadmap](../roadmap.md).
+The **Tavern MCP server** gives Claude Code (and any MCP client) the same console as tools and resources: orders, status, decisions, tasks and the quest, without the shell. Set it up with one `claude mcp add`: [Run your tavern from Claude Code over MCP](claude-code-mcp.md).

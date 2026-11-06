@@ -22,6 +22,7 @@ New here? Read in this order: **Quickstart → Your first order → The tavern �
 - [Give hirelings accounts (Composio)](guides/accounts.md)
 - [Turn on the Ledger](guides/ledger.md)
 - [Run your tavern with Claude Code](guides/claude-code.md)
+- [Run your tavern from Claude Code over MCP](guides/claude-code-mcp.md)
 - [Deploy to a server](guides/deploy.md)
 
 ## Reference

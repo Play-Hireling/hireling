@@ -37,7 +37,7 @@ Multi-agent setups are easy to demo and hard to run all day. Hireling is the bor
 - **No open internet.** Hirelings sit on an internal network; the only door out is an egress proxy that allows each one exactly the hosts in its profile.
 - **Costs you can read.** Every turn's tokens and cost are recorded per hireling, per day, against a budget ("mana").
 - **Cheap enough to run all day.** DeepSeek V4-Flash for the workers, V4-Pro for the one hireling that plans, the same model on OpenRouter as automatic fallback. More OpenAI-compatible providers are on the [roadmap](docs/roadmap.md).
-- **Ready for Claude.** A plain HTTP API and a shell CLI, so Claude Code (or any agent) can run your tavern from a terminal. An MCP server is on the [roadmap](docs/roadmap.md).
+- **Ready for Claude.** A plain HTTP API and a shell CLI, so Claude Code (or any agent) can run your tavern from a terminal, plus a [Tavern MCP server](docs/guides/claude-code-mcp.md) for MCP clients.
 
 > The game client — the pixel-art tavern where you watch the party work — is played at [playhireling.com/play](https://playhireling.com/play/). This repository is the engine underneath it.
 
@@ -83,6 +83,7 @@ Full walkthrough, profiles and troubleshooting: **[docs/getting-started/quicksta
 | `hireling` runtime | The loop inside every hireling container: profile → Hermes config, Front Desk queue, the bar, plans, handoffs, decisions, usage, redaction | [`runtime/`](runtime/) | Apache-2.0 |
 | tavern-core | Tasks with leases, priorities, the quest, budgets, the policy gate and the Front Desk | [`services/tavern-core/`](services/tavern-core/) | FSL-1.1-ALv2 |
 | egress | Per-hireling host allowlist proxy | [`services/egress/`](services/egress/) | Apache-2.0 |
+| tavern-mcp | The owner's console as an MCP server (stdio) for Claude Code and other MCP clients | [`services/tavern-mcp/`](services/tavern-mcp/) | Apache-2.0 |
 | ledger-writer + GBrain | The shared memory: typed markdown pages in git, keyword search over MCP | [`runtime/cmd/ledger-writer`](runtime/cmd/ledger-writer), [`services/gbrain/`](services/gbrain/), [`ledger/`](ledger/) | Apache-2.0 |
 | Starter party | Profiles and prompts of six hirelings | [`agents/`](agents/) | Apache-2.0 |
 
@@ -107,7 +108,7 @@ Add your own in minutes: [docs/guides/add-a-hireling.md](docs/guides/add-a-hirel
 
 - **Start:** [Quickstart](docs/getting-started/quickstart.md) · [Your first order](docs/getting-started/first-order.md) · [FAQ](docs/faq.md)
 - **Concepts:** [The tavern](docs/concepts/tavern.md) · [Hirelings](docs/concepts/hirelings.md) · [The bar](docs/concepts/the-bar.md) · [Quest and tasks](docs/concepts/quest-and-tasks.md) · [Autonomy and decisions](docs/concepts/autonomy.md) · [The Ledger](docs/concepts/ledger.md)
-- **Guides:** [Add a hireling](docs/guides/add-a-hireling.md) · [Models and providers](docs/guides/models.md) · [Accounts (Composio)](docs/guides/accounts.md) · [Turn on the Ledger](docs/guides/ledger.md) · [Run it with Claude Code](docs/guides/claude-code.md) · [Deploy to a server](docs/guides/deploy.md)
+- **Guides:** [Add a hireling](docs/guides/add-a-hireling.md) · [Models and providers](docs/guides/models.md) · [Accounts (Composio)](docs/guides/accounts.md) · [Turn on the Ledger](docs/guides/ledger.md) · [Run it with Claude Code](docs/guides/claude-code.md) · [Claude Code over MCP](docs/guides/claude-code-mcp.md) · [Deploy to a server](docs/guides/deploy.md)
 - **Reference:** [CLI](docs/reference/cli.md) · [Configuration](docs/reference/configuration.md) · [Profile schema](docs/reference/profile.md) · [Front Desk API](docs/api/front-desk.md) · [tavern-core API](docs/api/tavern-core.md) · [Feature ids](docs/reference/feature-ids.md)
 - **Project:** [Architecture](docs/architecture.md) · [Security](docs/security.md) · [Licensing](LICENSING.md) · [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md)
 

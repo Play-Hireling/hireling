@@ -1,6 +1,6 @@
 # Command-line reference
 
-Two CLIs: **`bin/tavern`** for you (the owner, on the host) and **`hireling`** inside each hireling container (for checks and debugging).
+Two CLIs: **`bin/tavern`** for you (the owner, on the host) and **`hireling`** inside each hireling container (for checks and debugging). The same owner console is also an MCP server, **`tavern-mcp`** ([below](#tavern-mcp)).
 
 ## `bin/tavern`
 
@@ -25,6 +25,18 @@ Examples:
 TAVERN_URL=https://tavern.example.com ./bin/tavern status     # a remote tavern behind TLS
 # Behind a proxy that exposes only /api/*, `quest`, `tasks` and `health` (which call /goal, /tasks, /healthz) are not reachable — use an SSH tunnel for those.
 ```
+
+## `tavern-mcp`
+
+The Tavern MCP server: `bin/tavern`'s commands as MCP tools and resources on stdio, for Claude Code and other MCP clients. Build with `make mcp` (→ `dist/tavern-mcp`) or `go install github.com/Play-Hireling/hireling/services/tavern-mcp/cmd/tavern-mcp@latest`. Reads `FRONTDESK_URL` (falls back to `TAVERN_URL`, default `http://127.0.0.1:8080`) and `FRONTDESK_TOKEN` (falls back to `FRONTDESK_OWNER_TOKEN`); it does not read `.env`.
+
+| Command | Does |
+| --- | --- |
+| `tavern-mcp` | Serve MCP on stdin/stdout (what `claude mcp add tavern -- tavern-mcp` runs) |
+| `tavern-mcp -check` | Call `GET /api/status` once with the owner token and print the party and open decisions |
+| `tavern-mcp -version` | Print the version |
+
+Tools, resources and setup: [Run your tavern from Claude Code over MCP](../guides/claude-code-mcp.md).
 
 ## `hireling` (inside a container)
 

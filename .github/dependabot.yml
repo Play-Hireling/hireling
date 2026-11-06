@@ -9,6 +9,9 @@ updates:
   - package-ecosystem: gomod
     directory: /services/egress
     schedule: { interval: weekly }
+  - package-ecosystem: gomod
+    directory: /services/tavern-mcp
+    schedule: { interval: weekly }
   - package-ecosystem: docker
     directories: [/runtime, /services/tavern-core, /services/egress, /services/gbrain, /services/ledger-writer]
     schedule: { interval: weekly }

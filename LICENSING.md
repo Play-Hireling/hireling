@@ -8,6 +8,7 @@ Hireling is **fair source**: the code is public, you can read it, run it, change
 | --- | --- | --- |
 | `runtime/` (the `hireling` runtime and `ledger-writer`) | [Apache-2.0](LICENSE) | Do anything; keep the notices; patent grant included |
 | `services/egress/` | [Apache-2.0](LICENSE) | Same |
+| `services/tavern-mcp/` (the Tavern MCP server) | [Apache-2.0](LICENSE) | Same |
 | `services/gbrain/` (our image and entrypoint around GBrain) | [Apache-2.0](LICENSE) | GBrain itself keeps its upstream license |
 | `services/ledger-writer/` | [Apache-2.0](LICENSE) | Same |
 | `agents/` (profiles and prompts) | [Apache-2.0](LICENSE) | Copy them into your own tavern freely |

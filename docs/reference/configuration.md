@@ -43,6 +43,15 @@ Everything is configured with environment variables (per service) and the hireli
 | `FRONTDESK_TOKEN_<ID>` | — | A hireling's own token |
 | `GOAL_TITLE`, `GOAL_TARGET`, `GOAL_CURRENCY`, `GOAL_SOURCE`, `GOAL_KINDS`, `GOAL_PERIOD` | —, 0, `USD`, `owner`, default kinds, — | Seed the quest on first boot only; later changes via `PUT /goal` |
 
+## tavern-mcp (on your machine)
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `FRONTDESK_URL` | `TAVERN_URL`, else `http://127.0.0.1:8080` | The tavern to manage |
+| `FRONTDESK_TOKEN` | `FRONTDESK_OWNER_TOKEN` | **Required.** The owner token |
+| `FRONTDESK_ALLOW_HTTP` | — | `1` allows `http://` to a non-loopback host (otherwise `https://` only) |
+| `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | — | Only when the tavern sits behind Cloudflare Access |
+
 ## egress
 
 | Variable | Default | Meaning |

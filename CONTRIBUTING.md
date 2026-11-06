@@ -27,7 +27,7 @@ make fmt           # gofmt
 docker compose up -d --build   # the full tavern (see the quickstart)
 ```
 
-There is no root `go.mod`: `runtime/`, `services/tavern-core/` and `services/egress/` are separate modules. tavern-core uses the runtime's `profile` package through a `replace` directive.
+There is no root `go.mod`: `runtime/`, `services/tavern-core/`, `services/egress/` and `services/tavern-mcp/` are separate modules. tavern-core uses the runtime's `profile` package through a `replace` directive.
 
 ## Pull requests
 
