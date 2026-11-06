@@ -34,6 +34,21 @@ A hireling never writes to the repo. It ends its answer with a `ledger` block (p
 
 GBrain picks the change up on its next sync (≈ 20–120 s). Every page is attributable; every change is a commit you can revert.
 
+## History and revert
+
+ledger-writer also serves the history of the Ledger and undoes a change, on the same internal address (`http://ledger-writer:8090`):
+
+- `GET /history?path=&limit=` lists the commits that touched one page (`limit` default 20, at most 100). Without `path` it lists the caller's own `learnings/<id>/`; a planner (the Innkeeper) sees the whole `brain/`.
+- `POST /revert {"commit": "…", "reason": "…"}` writes the undo as a **new commit**, authored by the asking hireling (`revert(<id>): …`), and pushes. History is never rewritten.
+
+Who may revert what:
+
+- a hireling reverts only commits whose every file is inside its `ledger.write` areas;
+- a planner may revert any page of `brain/`;
+- merges, commits that touch anything outside `brain/` and reverts that do not apply cleanly are refused (`409`/`422`), and the clone is left clean.
+
+The caller is identified by its container name, never by the request body. You can always revert by hand in the repository too: it is plain git.
+
 ## The data rule
 
 Customer, KYC, financial and legal data never enter the Ledger. `RESOLVER.md` says it plainly; prompts repeat it; and the hireling that would know such data should not exist in a tavern in the first place.

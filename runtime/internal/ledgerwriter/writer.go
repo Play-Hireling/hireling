@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -144,12 +145,9 @@ var (
 
 // Check is everything but git: the page may be written by this hireling.
 func (w *Writer) Check(id, page string, content []byte) (*profile.Profile, string, error) {
-	if !idRe.MatchString(id) {
-		return nil, "", ErrUnknownAgent
-	}
-	p, err := profile.Load(filepath.Join(w.AgentsDir, id))
+	p, err := w.profileOf(id)
 	if err != nil {
-		return nil, "", fmt.Errorf("%w: %s", ErrUnknownAgent, id)
+		return nil, "", err
 	}
 	rel := strings.TrimPrefix(strings.TrimSpace(page), "brain/")
 	if !strings.HasSuffix(rel, ".md") {
@@ -218,18 +216,26 @@ func (w *Writer) Write(ctx context.Context, id, page string, content []byte) (*R
 		return nil, err
 	}
 	if _, err := w.git(ctx, "push", "--quiet", "origin", "HEAD:"+w.branch()); err != nil {
-		// Someone (the owner, another writer) pushed first: replay once on the new tip.
-		if _, ferr := w.git(ctx, "pull", "--quiet", "--rebase", "origin", w.branch()); ferr != nil {
-			_, _ = w.git(ctx, "rebase", "--abort")
-			return nil, err
-		}
-		if _, err := w.git(ctx, "push", "--quiet", "origin", "HEAD:"+w.branch()); err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 	sha, _ := w.git(ctx, "rev-parse", "--short", "HEAD")
 	w.logf("%s wrote brain/%s (%s)", id, rel, sha)
 	return &Result{Path: "brain/" + rel, Commit: sha, Author: id}, nil
+}
+
+// push sends the branch and replays once when someone (the owner, another writer)
+// pushed first.
+func (w *Writer) push(ctx context.Context) error {
+	if _, err := w.git(ctx, "push", "--quiet", "origin", "HEAD:"+w.branch()); err != nil {
+		if _, ferr := w.git(ctx, "pull", "--quiet", "--rebase", "origin", w.branch()); ferr != nil {
+			_, _ = w.git(ctx, "rebase", "--abort")
+			return err
+		}
+		if _, err := w.git(ctx, "push", "--quiet", "origin", "HEAD:"+w.branch()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func oneLine(s string, n int) string {
@@ -279,6 +285,67 @@ func (w *Writer) Handler() http.Handler {
 		case err != nil:
 			w.logf("write by %s failed: %v", id, err)
 			writeJSON(rw, http.StatusBadGateway, map[string]string{"error": "could not commit the page: " + tail(err.Error(), 200)})
+		default:
+			writeJSON(rw, http.StatusOK, res)
+		}
+	})
+	mux.HandleFunc("GET /history", func(rw http.ResponseWriter, r *http.Request) {
+		var id string
+		if w.Identify != nil {
+			id = w.Identify(r.Context(), r.RemoteAddr)
+		}
+		if id == "" {
+			writeJSON(rw, http.StatusForbidden, map[string]string{"error": ErrUnknownAgent.Error()})
+			return
+		}
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		commits, err := w.History(ctx, id, r.URL.Query().Get("path"), limit)
+		switch {
+		case errors.Is(err, ErrUnknownAgent), errors.Is(err, ErrNotYourArea):
+			writeJSON(rw, http.StatusForbidden, map[string]string{"error": err.Error()})
+		case err != nil:
+			w.logf("history for %s failed: %v", id, err)
+			writeJSON(rw, http.StatusBadGateway, map[string]string{"error": tail(err.Error(), 200)})
+		default:
+			writeJSON(rw, http.StatusOK, map[string]any{"commits": commits})
+		}
+	})
+	mux.HandleFunc("POST /revert", func(rw http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Commit string `json:"commit"`
+			Reason string `json:"reason"`
+		}
+		dec := json.NewDecoder(http.MaxBytesReader(rw, r.Body, 4096))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&in); err != nil {
+			writeJSON(rw, http.StatusBadRequest, map[string]string{"error": "body must be {commit, reason}"})
+			return
+		}
+		id := ""
+		if w.Identify != nil {
+			id = w.Identify(r.Context(), r.RemoteAddr)
+		}
+		if id == "" {
+			writeJSON(rw, http.StatusForbidden, map[string]string{"error": ErrUnknownAgent.Error()})
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
+		defer cancel()
+		res, err := w.Revert(ctx, id, in.Commit, in.Reason)
+		switch {
+		case errors.Is(err, ErrUnknownAgent), errors.Is(err, ErrNotYourArea):
+			writeJSON(rw, http.StatusForbidden, map[string]string{"error": err.Error()})
+		case errors.Is(err, ErrUnknownCommit):
+			writeJSON(rw, http.StatusNotFound, map[string]string{"error": err.Error()})
+		case errors.Is(err, ErrRevertConflict):
+			writeJSON(rw, http.StatusConflict, map[string]string{"error": err.Error()})
+		case errors.Is(err, ErrNotRevertable):
+			writeJSON(rw, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		case err != nil:
+			w.logf("revert by %s failed: %v", id, err)
+			writeJSON(rw, http.StatusBadGateway, map[string]string{"error": "could not revert the commit: " + tail(err.Error(), 200)})
 		default:
 			writeJSON(rw, http.StatusOK, res)
 		}

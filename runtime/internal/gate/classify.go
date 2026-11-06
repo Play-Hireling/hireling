@@ -129,15 +129,47 @@ func Classify(tool string, input map[string]any, e Env) Verdict {
 			return Verdict{Kind: External, Actions: acts}
 		}
 		return Verdict{Kind: Local}
-	case strings.HasPrefix(lt, "mcp_gbrain_"):
-		return Verdict{Kind: Local} // read-only brain tokens (E2); writes go through ledger-writer
-	case strings.HasPrefix(lt, "mcp_composio_"):
-		return composio(strings.TrimPrefix(lt, "mcp_composio_"), input)
+	}
+	switch srv, rest := mcpServer(lt); srv {
+	case "gbrain":
+		// E2: brain reads are local. No hireling writes through GBrain
+		// (writes go through ledger-writer), so anything not known to be a
+		// read (put_page, capture, remember, forget, a tool a newer GBrain
+		// adds) falls through to the profile, or the owner decides — the
+		// read-only token is the second line, not the only one.
+		if gbrainReads[rest] {
+			return Verdict{Kind: Local}
+		}
+	case "composio":
+		return composio(rest, input)
 	}
 	// Anything else (browser, desktop, cron, messaging, another MCP server, a
 	// tool added by a newer Hermes) is an external action named after the tool:
 	// the profile has to list it, or the owner decides.
 	return Verdict{Kind: External, Actions: []Act{{Action: lt, Target: lt}}}
+}
+
+// gbrainReads are GBrain MCP tools that only read the brain: search and page
+// reads, the MEMORY_VERBS v1 read verbs (recall, entity, synthesize,
+// context_pack, delta) and the identity/skill listings.
+var gbrainReads = map[string]bool{
+	"search": true, "query": true, "get_page": true, "find_experts": true,
+	"recall": true, "entity": true, "synthesize": true, "context_pack": true, "delta": true,
+	"get_brain_identity": true, "list_skills": true,
+}
+
+// mcpServer splits a lower-cased MCP tool name into one of our servers and
+// the rest. Hermes names them mcp__<server>__<tool>; the single-underscore
+// form mcp_<server>_<tool> is still accepted. Other servers give "".
+func mcpServer(lt string) (server, rest string) {
+	for _, s := range []string{"gbrain", "composio"} {
+		for _, p := range []string{"mcp__" + s + "__", "mcp_" + s + "_"} {
+			if strings.HasPrefix(lt, p) {
+				return s, strings.TrimPrefix(lt, p)
+			}
+		}
+	}
+	return "", ""
 }
 
 func str(m map[string]any, keys ...string) string {

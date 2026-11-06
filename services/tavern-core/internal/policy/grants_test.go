@@ -85,8 +85,8 @@ func TestMemoryGrants(t *testing.T) {
 	}
 }
 
-// Runs against a real Redis when REDIS_TEST_URL is set (CI has none; run it
-// locally with `redis-server` → REDIS_TEST_URL=redis://127.0.0.1:6379/15).
+// Runs against a real Redis when REDIS_TEST_URL is set (CI sets it; run it
+// locally with `redis-server` → REDIS_TEST_URL=redis://127.0.0.1:6379).
 func TestRedisGrants(t *testing.T) {
 	url := os.Getenv("REDIS_TEST_URL")
 	if url == "" {
@@ -96,6 +96,9 @@ func TestRedisGrants(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Each package's Redis test owns a DB: go test runs packages in
+	// parallel and every one of them flushes its DB first.
+	opt.DB = 3
 	c := redis.NewClient(opt)
 	defer c.Close()
 	if err := c.FlushDB(context.Background()).Err(); err != nil {

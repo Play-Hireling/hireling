@@ -86,6 +86,8 @@ Hermes runs `hireling gate` before every tool call (a `pre_tool_call` shell hook
 - **local work** — reading, searching, files in the hireling's own volume, tests — runs at once, with no network call;
 - **anything that acts on the outside world** — `git push`, opening a PR, an HTTP write, publishing a package, a Composio `MULTI_EXECUTE`, the browser, the desktop, cron, or a tool it does not know — is asked of tavern-core.
 
+MCP tools are named `mcp__<server>__<tool>` (the single-underscore `mcp_<server>_<tool>` is accepted too). GBrain **reads** (`search`, `query`, `get_page`, `recall`, `context_pack` and the other read verbs) are local; any other GBrain tool (`put_page`, `capture`, `remember`, `forget`, or one a newer GBrain adds) goes to tavern-core like any outside action, because hireling writes go through ledger-writer. Composio tools follow the Composio rules above; tools of any other MCP server are external actions named after the tool.
+
 The gate also refuses any call that touches Hermes' `config.yaml`, `.env`, the consent allowlist or the hireling prompt, so the model cannot switch the gate off.
 
 ## The policy gate

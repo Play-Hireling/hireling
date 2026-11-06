@@ -81,6 +81,7 @@ func TestAPIRunnerStreamsAndKeepsFences(t *testing.T) {
 }
 
 func TestAutoFallsBackToCLIWhenServerIsDown(t *testing.T) {
+	skipWithoutSh(t)
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "hermes")
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho '☤ Hermes'\necho 'from the cli'\n"), 0o755); err != nil {

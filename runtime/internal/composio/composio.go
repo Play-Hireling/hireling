@@ -42,7 +42,7 @@ const Host = "backend.composio.dev"
 // KeyEnv names the environment variable with the project API key.
 const KeyEnv = "COMPOSIO_API_KEY"
 
-// Server is the Hermes `mcp_servers` key; tools register as mcp_composio_*.
+// Server is the Hermes `mcp_servers` key; tools register as mcp__composio__* in Hermes.
 const Server = "composio"
 
 // Session is one Tool Router session.
@@ -200,7 +200,7 @@ func (c *Client) Ensure(ctx context.Context, file, userID string, toolkits []str
 func Instructions(toolkits []string) string {
 	return `## The owner's accounts (Composio)
 
-You reach the owner's accounts only through the ` + "`mcp_composio_*`" + ` tools, and only these toolkits: ` + strings.Join(toolkits, ", ") + `. Find the tool with COMPOSIO_SEARCH_TOOLS, then run it with COMPOSIO_MULTI_EXECUTE_TOOL. Deleting is disabled.
+You reach the owner's accounts only through the ` + "`mcp__composio__*`" + ` tools, and only these toolkits: ` + strings.Join(toolkits, ", ") + `. Find the tool with COMPOSIO_SEARCH_TOOLS, then run it with COMPOSIO_MULTI_EXECUTE_TOOL. Deleting is disabled.
 
 When a toolkit is not connected, call COMPOSIO_MANAGE_CONNECTIONS with it: it returns a Connect Link. Never ask the owner for a password, token, cookie or 2FA code, and never paste one anywhere. Instead end your answer with an ` + "`ask`" + ` block: question "Connect <toolkit> so I can <what for>?", options ["Connected", "Send a new link", "Not now"], the link in the context with "the link expires in 10 minutes", urgency "high" when a task waits on it. When the owner answers "Connected", check with COMPOSIO_MANAGE_CONNECTIONS and carry on with the task; "Send a new link" means call it again for a fresh link.
 
