@@ -22,6 +22,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - Documentation: concepts, guides, API and CLI reference, security model, licensing.
 
 ### Fixed
+- ledger-writer replays a push that lost a race (someone pushed between its fetch and its push) for page writes too, and the replay works in the container: it rebases as `ledger-writer`, since the container has no git identity of its own. The Ledger history names only the files in the caller's areas (the rest are counted as `hidden`).
 - The gate reads MCP tool names as Hermes writes them, `mcp__<server>__<tool>` (the single-underscore form still works). Before, GBrain and Composio calls under the double-underscore name fell through to "external action". Only GBrain **reads** are local now: a GBrain write tool goes to tavern-core like any outside action.
 
 ### Changed

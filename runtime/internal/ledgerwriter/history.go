@@ -30,6 +30,9 @@ type Commit struct {
 	Date    string   `json:"date"`
 	Subject string   `json:"subject"`
 	Paths   []string `json:"paths"`
+	// Hidden counts the files of the commit outside the caller's ledger
+	// areas: a non-planner sees that they exist, not their names.
+	Hidden int `json:"hidden,omitempty"`
 }
 
 // Error kinds the handler maps to HTTP codes (E6).
@@ -88,8 +91,10 @@ func historyPaths(p *profile.Profile, rel string) ([]string, error) {
 }
 
 // History lists the commits that changed a page (or the caller's area).
-// Each commit lists every file it touched, so a move into the area shows
-// where the page came from (and why a revert of it may be refused).
+// Each commit lists the files it touched that the caller may read or write
+// (a planner sees all), so a move into the area shows where the page came
+// from (and why a revert of it may be refused); the other files are only
+// counted (Hidden).
 func (w *Writer) History(ctx context.Context, id, page string, limit int) ([]Commit, error) {
 	p, err := w.profileOf(id)
 	if err != nil {
@@ -117,7 +122,39 @@ func (w *Writer) History(ctx context.Context, id, page string, limit int) ([]Com
 	if err != nil {
 		return nil, err
 	}
-	return parseLog(out), nil
+	commits := parseLog(out)
+	if !p.Planner {
+		for i := range commits {
+			commits[i].Paths, commits[i].Hidden = visiblePaths(p, commits[i].Paths)
+		}
+	}
+	return commits, nil
+}
+
+// visiblePaths keeps the files a non-planner may read or write and counts the
+// rest: the history of its own area must not list the names of pages it
+// cannot read.
+func visiblePaths(p *profile.Profile, paths []string) ([]string, int) {
+	keep, hidden := []string{}, 0
+	for _, f := range paths {
+		if canSee(p, f) {
+			keep = append(keep, f)
+			continue
+		}
+		hidden++
+	}
+	return keep, hidden
+}
+
+// canSee reports whether the caller may see the name of a repo file: a
+// planner sees all; anyone else, the files of brain/ in its ledger.read or
+// ledger.write areas.
+func canSee(p *profile.Profile, f string) bool {
+	if p.Planner {
+		return true
+	}
+	rel, ok := strings.CutPrefix(f, "brain/")
+	return ok && (ledger.InArea(p.Ledger.Read, rel) || ledger.InArea(p.Ledger.Write, rel))
 }
 
 // parseLog reads `git log --name-only --no-renames --full-diff` (every file of
@@ -203,13 +240,22 @@ func (w *Writer) Revert(ctx context.Context, id, commit, reason string) (*Result
 	if len(files) == 0 {
 		return nil, fmt.Errorf("%w: %s changes no file", ErrNotRevertable, commit)
 	}
+	// A refusal names a file only when the caller may see its name (as in
+	// History); the others are only counted.
+	_, hidden := visiblePaths(p, files)
 	for _, f := range files {
 		if !strings.HasPrefix(f, "brain/") {
-			return nil, fmt.Errorf("%w: %s also changes %s, outside the Ledger", ErrNotRevertable, commit, f)
+			if canSee(p, f) {
+				return nil, fmt.Errorf("%w: %s also changes %s, outside the Ledger", ErrNotRevertable, commit, f)
+			}
+			return nil, fmt.Errorf("%w: %s also changes %d file(s) outside your ledger areas", ErrNotRevertable, commit, hidden)
 		}
 		rel := strings.TrimPrefix(f, "brain/")
 		if !p.Planner && !ledger.InArea(p.Ledger.Write, rel) {
-			return nil, fmt.Errorf("%w: %s may write %s, not %q", ErrNotYourArea, id, strings.Join(p.Ledger.Write, ", "), rel)
+			if canSee(p, f) {
+				return nil, fmt.Errorf("%w: %s may write %s, not %q", ErrNotYourArea, id, strings.Join(p.Ledger.Write, ", "), rel)
+			}
+			return nil, fmt.Errorf("%w: %s may write %s; this change also touches %d file(s) outside your ledger areas", ErrNotYourArea, id, strings.Join(p.Ledger.Write, ", "), hidden)
 		}
 	}
 

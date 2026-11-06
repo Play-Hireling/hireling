@@ -215,7 +215,9 @@ func (w *Writer) Write(ctx context.Context, id, page string, content []byte) (*R
 		"commit", "--quiet", "--author", author, "-m", msg); err != nil {
 		return nil, err
 	}
-	if _, err := w.git(ctx, "push", "--quiet", "origin", "HEAD:"+w.branch()); err != nil {
+	// A newer remote (the owner or another writer pushed between the fetch
+	// and this push) is replayed once, as for a revert.
+	if err := w.push(ctx); err != nil {
 		return nil, err
 	}
 	sha, _ := w.git(ctx, "rev-parse", "--short", "HEAD")
@@ -224,12 +226,18 @@ func (w *Writer) Write(ctx context.Context, id, page string, content []byte) (*R
 }
 
 // push sends the branch and replays once when someone (the owner, another writer)
-// pushed first.
+// pushed first. The replay rebases as ledger-writer: the container has no git
+// identity of its own, and without one the rebase cannot write its commits.
 func (w *Writer) push(ctx context.Context) error {
 	if _, err := w.git(ctx, "push", "--quiet", "origin", "HEAD:"+w.branch()); err != nil {
-		if _, ferr := w.git(ctx, "pull", "--quiet", "--rebase", "origin", w.branch()); ferr != nil {
+		domain := w.Domain
+		if domain == "" {
+			domain = "hireling.tavern"
+		}
+		if _, ferr := w.git(ctx, "-c", "user.name=ledger-writer", "-c", "user.email=ledger-writer@"+domain,
+			"pull", "--quiet", "--rebase", "origin", w.branch()); ferr != nil {
 			_, _ = w.git(ctx, "rebase", "--abort")
-			return err
+			return fmt.Errorf("%w (replay on the newer remote failed: %v)", err, ferr)
 		}
 		if _, err := w.git(ctx, "push", "--quiet", "origin", "HEAD:"+w.branch()); err != nil {
 			return err

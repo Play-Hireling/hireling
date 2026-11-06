@@ -259,3 +259,81 @@ func TestRevertRenameCannotEscapeArea(t *testing.T) {
 		t.Fatalf("planner revert: %v", err)
 	}
 }
+
+// A non-planner's history names only the files it may read or write; the
+// others of the same commit are counted, not named. A planner sees them all.
+func TestHistoryHidesOtherAreas(t *testing.T) {
+	w, bare := setup(t)
+	ctx := context.Background()
+	seed := filepath.Join(t.TempDir(), "s")
+	run(t, filepath.Dir(seed), "clone", "--quiet", bare, seed)
+	for _, d := range []string{"learnings/dev", "private"} {
+		if err := os.MkdirAll(filepath.Join(seed, "brain", filepath.FromSlash(d)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(seed, "brain", "learnings", "dev", "y.md"), []byte(learning("dev", "dev")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(seed, "brain", "private", "salary-negotiation.md"), []byte("# notes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, seed, "add", "-A")
+	run(t, seed, "commit", "--quiet", "-m", "two areas")
+	run(t, seed, "push", "--quiet", "origin", "HEAD:main")
+
+	find := func(hist []Commit) Commit {
+		t.Helper()
+		for _, c := range hist {
+			if c.Subject == "two areas" {
+				return c
+			}
+		}
+		t.Fatalf("commit not listed: %+v", hist)
+		return Commit{}
+	}
+	hist, err := w.History(ctx, "dev", "", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := find(hist); len(c.Paths) != 1 || c.Paths[0] != "brain/learnings/dev/y.md" || c.Hidden != 1 {
+		t.Fatalf("dev sees %v (hidden %d)", c.Paths, c.Hidden)
+	}
+	// A refused revert does not name the hidden file either.
+	if _, err := w.Revert(ctx, "dev", find(hist).Commit, "probe"); !errors.Is(err, ErrNotYourArea) || strings.Contains(err.Error(), "salary-negotiation") {
+		t.Fatalf("revert refusal: %v", err)
+	}
+	hist, err = w.History(ctx, "innkeeper", "", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := find(hist); len(c.Paths) != 2 || c.Hidden != 0 {
+		t.Fatalf("the planner sees %v (hidden %d)", c.Paths, c.Hidden)
+	}
+}
+
+// A file outside brain/ is not named to a non-planner in the refusal either;
+// a planner still gets the name.
+func TestRevertRefusalHidesNames(t *testing.T) {
+	w, bare := setup(t)
+	ctx := context.Background()
+	seed := filepath.Join(t.TempDir(), "s")
+	run(t, filepath.Dir(seed), "clone", "--quiet", bare, seed)
+	if err := os.WriteFile(filepath.Join(seed, "brain", "learnings", "dev", "y.md"), []byte(learning("dev", "dev")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(seed, "outside-brain-secret-name.txt"), []byte("z"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, seed, "add", "-A")
+	run(t, seed, "commit", "--quiet", "-m", "mixed")
+	run(t, seed, "push", "--quiet", "origin", "HEAD:main")
+	sha := run(t, seed, "rev-parse", "HEAD")
+	_, err := w.Revert(ctx, "dev", sha, "probe")
+	if !errors.Is(err, ErrNotRevertable) || strings.Contains(err.Error(), "outside-brain-secret-name") || !strings.Contains(err.Error(), "1 file(s) outside your ledger areas") {
+		t.Fatalf("dev: %v", err)
+	}
+	if _, err := w.Revert(ctx, "innkeeper", sha, "probe"); !errors.Is(err, ErrNotRevertable) || !strings.Contains(err.Error(), "outside-brain-secret-name.txt") {
+		t.Fatalf("planner: %v", err)
+	}
+}

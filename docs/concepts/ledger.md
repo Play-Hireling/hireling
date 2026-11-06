@@ -38,7 +38,7 @@ GBrain picks the change up on its next sync (≈ 20–120 s). Every page is attr
 
 ledger-writer also serves the history of the Ledger and undoes a change, on the same internal address (`http://ledger-writer:8090`):
 
-- `GET /history?path=&limit=` lists the commits that touched one page (`limit` default 20, at most 100). Without `path` it lists the caller's own `learnings/<id>/`; a planner (the Innkeeper) sees the whole `brain/`.
+- `GET /history?path=&limit=` lists the commits that touched one page (`limit` default 20, at most 100). Without `path` it lists the caller's own `learnings/<id>/`; a planner (the Innkeeper) sees the whole `brain/`. Each commit lists the files it touched inside the caller's `ledger.read` and `ledger.write` areas; the others are only counted (`hidden`), so the history never names a page the caller cannot read. A planner sees every file.
 - `POST /revert {"commit": "…", "reason": "…"}` writes the undo as a **new commit**, authored by the asking hireling (`revert(<id>): …`), and pushes. History is never rewritten.
 
 Who may revert what:
