@@ -42,7 +42,13 @@ func (l *Loop) writePage(ctx context.Context, p plan.LedgerPage) string {
 	if !ledger.InArea(l.Profile.Ledger.Write, p.Path) {
 		return fmt.Sprintf("(ledger page %s not written: you may write only %s)", p.Path, strings.Join(l.Profile.Ledger.Write, ", "))
 	}
-	body, _ := json.Marshal(map[string]string{"path": p.Path, "content": p.Content})
+	// A page is a commit in the brain: no secret goes in (the writer has no
+	// redactor of its own, and this one knows the container's environment).
+	content := p.Content
+	if l.Redactor != nil {
+		content = l.Redactor.Text(content)
+	}
+	body, _ := json.Marshal(map[string]string{"path": p.Path, "content": content})
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(l.LedgerWriter, "/")+"/pages", bytes.NewReader(body))

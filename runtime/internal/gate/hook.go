@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/Play-Hireling/hireling/runtime/internal/usage"
 )
 
 // Payload is what Hermes pipes to a pre_tool_call shell hook.
@@ -39,6 +41,9 @@ type Context struct {
 	Why  string `json:"why,omitempty"`
 	Turn string `json:"turn,omitempty"`
 	Task string `json:"task,omitempty"`
+	// TurnTokens is the running turn's spend so far, sent with the D7
+	// `tokens` check only.
+	TurnTokens int64 `json:"-"`
 }
 
 // Checker asks the policy gate about one action.
@@ -63,8 +68,14 @@ func (c *HTTPChecker) Check(ctx context.Context, action, target string, tc Conte
 	}
 	// use: the hireling is about to act — tavern-core consumes the owner's grant
 	// for it, or remembers the block for the next card.
-	body, _ := json.Marshal(map[string]any{"agent": c.Agent, "action": action, "target": target, "use": true,
-		"why": tc.Why, "turn": tc.Turn, "task": tc.Task})
+	fields := map[string]any{"agent": c.Agent, "action": action, "target": target, "use": true,
+		"why": tc.Why, "turn": tc.Turn, "task": tc.Task}
+	if action == Tokens {
+		// Always sent: a tavern-core without D7's in-turn check refuses the
+		// unknown field (400) instead of judging `tokens` as an action.
+		fields["turn_tokens"] = tc.TurnTokens
+	}
+	body, _ := json.Marshal(fields)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.BaseURL, "/")+"/actions/check", bytes.NewReader(body))
 	if err != nil {
 		return d, err
@@ -106,24 +117,49 @@ type Hook struct {
 	Agent   string
 	Home    string
 	Checker Checker
+	// Spend reads the running turn's tokens (D7); nil = Hermes' state.db
+	// under Home.
+	Spend Spender
 }
 
+// Spender reads what the sessions started since a time have spent so far.
+type Spender interface {
+	Tokens(ctx context.Context, since time.Time) (int64, error)
+}
+
+// Tokens is the gate action checked before every tool call of a P2/P3 turn
+// when the profile has a daily token budget (D7): tavern-core adds the
+// running turn's spend to today's tokens and answers free or budget.
+const Tokens = "tokens"
+
 // TurnFile is where the runtime writes the running turn for the hook (D4),
-// under HERMES_HOME. It is context for the log, never a permission.
+// under HERMES_HOME. It is context for the log and the D7 budget check (the
+// work's priority, the profile's tokens_per_day), never a permission; the
+// hook refuses tool calls that touch it.
 const TurnFile = "gate-turn.json"
 
-// turnContext reads the running turn and the hireling's own stated reason:
+// turnInfo is the content of TurnFile.
+type turnInfo struct {
+	Turn         string `json:"turn"`
+	Task         string `json:"task"`
+	Topic        string `json:"topic"`
+	At           string `json:"at"`             // when the turn started (RFC 3339)
+	Priority     string `json:"priority"`       // P0–P3 of the work (D7); "" = P2
+	TokensPerDay int    `json:"tokens_per_day"` // the profile's budget; 0 = none (D7)
+}
+
+func (h *Hook) readTurn() turnInfo {
+	var t turnInfo
+	if raw, err := os.ReadFile(filepath.Join(h.Home, TurnFile)); err == nil {
+		_ = json.Unmarshal(raw, &t)
+	}
+	return t
+}
+
+// turnContext is the running turn and the hireling's own stated reason:
 // Composio's MULTI_EXECUTE carries a `thought`; otherwise the turn's topic.
-func (h *Hook) turnContext(p Payload) Context {
-	var c Context
-	var t struct {
-		Turn  string `json:"turn"`
-		Task  string `json:"task"`
-		Topic string `json:"topic"`
-	}
-	if raw, err := os.ReadFile(filepath.Join(h.Home, TurnFile)); err == nil && json.Unmarshal(raw, &t) == nil {
-		c.Turn, c.Task, c.Why = t.Turn, t.Task, t.Topic
-	}
+func (h *Hook) turnContext(p Payload, t turnInfo) Context {
+	c := Context{Turn: t.Turn, Task: t.Task, Why: t.Topic}
 	for _, k := range []string{"thought", "reason", "description"} {
 		if v, ok := p.Input[k].(string); ok && strings.TrimSpace(v) != "" {
 			c.Why = v
@@ -134,18 +170,24 @@ func (h *Hook) turnContext(p Payload) Context {
 	return c
 }
 
-// Decide classifies the call and asks the gate about every external action.
-// The strictest answer wins; an unreachable gate blocks (fail closed).
+// Decide classifies the call, stops it when a P2/P3 turn is over the day's
+// token budget (D7, any tool) and asks the gate about every external action.
+// The strictest answer wins; an unreachable gate blocks external actions
+// (fail closed).
 func (h *Hook) Decide(ctx context.Context, p Payload) Outcome {
 	v := Classify(p.Tool, p.Input, Env{Home: h.Home, Cwd: p.Cwd})
-	switch v.Kind {
-	case Local:
-		return Outcome{Allow: true}
-	case Refuse:
+	if v.Kind == Refuse {
 		return Outcome{Message: "Blocked by the autonomy gate (D1): " + v.Reason + ". Do not try another way; carry on with the task without it."}
 	}
-	var checked []string
-	tc := h.turnContext(p)
+	t := h.readTurn()
+	tc := h.turnContext(p, t)
+	checked, stop := h.tokenBudget(ctx, p, t, tc)
+	if stop != "" {
+		return Outcome{Checked: checked, Message: stop}
+	}
+	if v.Kind == Local {
+		return Outcome{Allow: true, Checked: checked}
+	}
 	for _, a := range v.Actions {
 		d, err := h.Checker.Check(ctx, a.Action, a.Target, tc)
 		if err != nil {
@@ -180,6 +222,63 @@ func askOwner(a Act, reason string) string {
 	return fmt.Sprintf("Blocked by the autonomy gate (D1): `%s` on %s is the owner's decision (%s). Nothing was done. Do not try another tool or a workaround. "+
 		"If the task needs it, finish the parts you can, then end your answer with an `ask` block asking the owner to approve exactly this action (what, where, why), with options such as [\"Approve\", \"Not now\"]: his yes lets you do it once.",
 		a.Action, cut(a.Target, 120), reason)
+}
+
+// tokenBudget is D7 inside a turn. Before each tool call of a P2/P3 turn whose
+// profile has tokens_per_day, the turn's spend so far (Hermes' store) goes to
+// tavern-core, which adds today's recorded tokens: at or over the budget the
+// call is refused (and logged there), so the model wraps up instead of
+// spending on. P0/P1 work, turns without a budget and calls outside a runtime
+// turn are not checked. If tavern-core cannot answer, the turn's own spend is
+// held to one day's budget: an outage neither stops the turn's local work
+// (as for D1) nor lets it spend without a limit. An unreadable store is
+// logged and not cut (the bar loop still holds the next P2/P3 message).
+// Returns the log notes and, when the call must stop, the model's message.
+func (h *Hook) tokenBudget(ctx context.Context, p Payload, t turnInfo, tc Context) ([]string, string) {
+	if t.TokensPerDay <= 0 || exempt(t.Priority) {
+		return nil, ""
+	}
+	at, err := time.Parse(time.RFC3339, t.At)
+	if err != nil {
+		return nil, "" // no turn start: nothing to measure
+	}
+	spend := h.Spend
+	if spend == nil {
+		spend = &usage.Store{DB: filepath.Join(h.Home, "state.db")}
+	}
+	spent, err := spend.Tokens(ctx, at.Add(-time.Second))
+	if err != nil {
+		return []string{Tokens + "=unread(" + cut(err.Error(), 80) + ")"}, ""
+	}
+	tc.TurnTokens = spent
+	d, err := h.Checker.Check(ctx, Tokens, p.Tool, tc)
+	if err == nil {
+		switch d.Level {
+		case "free":
+			return nil, ""
+		case "budget":
+			return []string{Tokens + "=budget"}, budgetStop(d.Reason)
+		}
+		err = fmt.Errorf("unexpected level %q", d.Level)
+	}
+	if spent >= int64(t.TokensPerDay) {
+		return []string{Tokens + "=budget(local)"}, budgetStop(fmt.Sprintf(
+			"this turn alone has used %d tokens, the whole daily budget of %d (tavern-core could not confirm today's total: %s)",
+			spent, t.TokensPerDay, cut(err.Error(), 120)))
+	}
+	return []string{Tokens + "=unknown(" + cut(err.Error(), 80) + ")"}, ""
+}
+
+// exempt: P0/P1 work still runs over the token budget (D7).
+func exempt(prio string) bool {
+	p := strings.ToUpper(strings.TrimSpace(prio))
+	return p == "P0" || p == "P1"
+}
+
+func budgetStop(reason string) string {
+	return "Stopped by the token budget (D7): " + reason + ". This tool call was not run. Today's tokens are spent, so this P2/P3 work stops here until the budget resets at 00:00 UTC. " +
+		"Do not call any more tools (they will be refused too), do not try a workaround and do not ask the owner for more budget. " +
+		"Finish now with a short answer: what is done, what is left, and that the rest waits for the budget reset."
 }
 
 func cut(s string, n int) string {

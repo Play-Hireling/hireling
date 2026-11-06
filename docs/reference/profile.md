@@ -60,7 +60,7 @@ Lowercase slug (`a-z`, `0-9`, `-`). The id names the container (`agent-<id>`), t
 Marks the hireling whose answers may carry a `plan` block and who approves handoffs. Exactly one per tavern is the norm.
 
 ### `budget`
-`tokens_per_day` is the hireling's daily mana: every turn's usage is recorded against it and reported by `GET /agents/<id>/budget`. Once it is reached, the runtime runs only P0/P1 work (D7): your commands and answers, bar messages about P0/P1 tasks, and alerts. Any other bar message is held, unacked, and runs after 00:00 UTC. Set it to `0` for no budget.
+`tokens_per_day` is the hireling's daily mana: every turn's usage is recorded against it and reported by `GET /agents/<id>/budget`. Once it is reached, the runtime runs only P0/P1 work (D7): your commands and answers, bar messages about P0/P1 tasks, and alerts. Any other bar message is held, unacked, and runs after 00:00 UTC. A P2/P3 turn already running when the budget runs out is cut between tool calls: the gate hook refuses the next tool call and the model wraps up. Set it to `0` for no budget.
 
 `web_calls_per_day` caps Hermes' `web_search` and `web_extract` per UTC day (D8). The gate hook counts every call in tavern-core. Past the cap, the call is blocked with the level `budget`, and the hireling carries on without the web until 00:00 UTC; this does not ask you. Only the blocked calls go to the Autonomy Log. Set it to `0` for no cap.
 

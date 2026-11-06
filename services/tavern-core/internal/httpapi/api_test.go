@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,11 +13,30 @@ import (
 	"github.com/Play-Hireling/hireling/runtime/profile"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/asks"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/autonomy"
+	"github.com/Play-Hireling/hireling/services/tavern-core/internal/frontdesk"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/goal"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/policy"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/tasks"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/usage"
 )
+
+// fakeApprovals stands in for the Front Desk: the owner chose "Approve"
+// (or chosen) on every decision, unless err is set.
+type fakeApprovals struct {
+	chosen string
+	err    error
+}
+
+func (f fakeApprovals) Bind(context.Context, string, string, string, []string) (string, error) {
+	return "Approve", f.err
+}
+
+func (f fakeApprovals) Confirm(context.Context, string, string, string) (string, string, error) {
+	if f.chosen == "" {
+		return "Approve", "Approve", f.err
+	}
+	return f.chosen, "Approve", f.err
+}
 
 func newServer() *httptest.Server {
 	p := &profile.Profile{ID: "test", Model: "deepseek-v4-flash"}
@@ -333,7 +353,7 @@ func TestGateGrantsOverHTTP(t *testing.T) {
 	g := policy.NewMemoryGrants()
 	g.Now = func() time.Time { return now }
 	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(),
-		Grants: g, Now: func() time.Time { return now }}
+		Grants: g, Approvals: fakeApprovals{}, Now: func() time.Time { return now }}
 	srv := httptest.NewServer(s.Handler())
 	defer srv.Close()
 
@@ -360,11 +380,11 @@ func TestGateGrantsOverHTTP(t *testing.T) {
 	var ans struct {
 		Granted []policy.Act `json:"granted"`
 	}
-	call(t, srv, "POST", "/actions/answer", "", `{"decision":"unknown","choice":"Approve"}`, &ans)
+	call(t, srv, "POST", "/actions/answer", "", `{"decision":"unknown","choice":"Approve","agent":"dev"}`, &ans)
 	if len(ans.Granted) != 0 {
 		t.Fatalf("a card without gate actions granted %v", ans.Granted)
 	}
-	call(t, srv, "POST", "/actions/answer", "", `{"decision":"dec-1","choice":"Approve"}`, &ans)
+	call(t, srv, "POST", "/actions/answer", "", `{"decision":"dec-1","choice":"Approve","agent":"dev"}`, &ans)
 	if len(ans.Granted) != 1 {
 		t.Fatalf("approve: %v", ans.Granted)
 	}
@@ -392,7 +412,7 @@ func TestCappedLimitsOverHTTP(t *testing.T) {
 	g := policy.NewMemoryGrants()
 	g.Now = func() time.Time { return now }
 	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(),
-		Grants: g, Now: func() time.Time { return now }}
+		Grants: g, Approvals: fakeApprovals{}, Now: func() time.Time { return now }}
 	srv := httptest.NewServer(s.Handler())
 	defer srv.Close()
 	check := func(action string) policy.Decision {
@@ -416,7 +436,7 @@ func TestCappedLimitsOverHTTP(t *testing.T) {
 		t.Fatalf("blocked = %v", acts)
 	}
 	call(t, srv, "POST", "/actions/pending", "social-media", `{"decision":"d-9","actions":[{"action":"publish_owned_channel"}],"approve":"Approve"}`, nil)
-	call(t, srv, "POST", "/actions/answer", "", `{"decision":"d-9","choice":"Approve"}`, nil)
+	call(t, srv, "POST", "/actions/answer", "", `{"decision":"d-9","choice":"Approve","agent":"social-media"}`, nil)
 	if d := check("publish_owned_channel"); d.Level != policy.Free {
 		t.Fatalf("approved extra use: %+v", d)
 	}
@@ -620,5 +640,283 @@ func TestWebCallBudget(t *testing.T) {
 	now = now.Add(2 * time.Hour)
 	if d := web(true); d.Level != policy.Free || d.Used != 1 {
 		t.Fatalf("next day: %+v", d)
+	}
+}
+
+// D1/D3: the body of /actions/answer proves nothing. A hireling that reaches
+// tavern-core cannot grant itself a use: its card is tied to an open decision
+// of its own, once, before the owner answers, and the desk writes on the
+// decision what a yes grants; the grant waits for the Front Desk's record of
+// the owner's answer (only the owner token can answer) and only the
+// decision's first option is a yes.
+func TestAnswerNeedsTheOwnersAnswer(t *testing.T) {
+	dev := &profile.Profile{ID: "dev", DeskID: "builder", Model: "deepseek-v4-flash"}
+	dev.Autonomy.OwnerDecides = profile.HardDeny
+	other := &profile.Profile{ID: "writer", DeskID: "writer", Model: "deepseek-v4-flash"}
+	other.Autonomy.OwnerDecides = profile.HardDeny
+	desk := &frontdesk.Desk{Agents: []string{"builder", "writer"}, SharedToken: strings.Repeat("s", 40), OwnerToken: strings.Repeat("o", 40)}
+	g := policy.NewMemoryGrants()
+	s := &Server{Gate: policy.New(dev, other), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(),
+		Grants: g, Approvals: desk, Extra: desk.Register, Owner: desk.IsOwner}
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	deskCall := func(path, token, body string, out any) int {
+		t.Helper()
+		req, _ := http.NewRequest("POST", srv.URL+path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		if out != nil {
+			_ = json.NewDecoder(res.Body).Decode(out)
+		}
+		return res.StatusCode
+	}
+	open := func(from string) string {
+		t.Helper()
+		var out struct{ Decision frontdesk.Decision }
+		if code := deskCall("/api/decisions", desk.SharedToken, `{"from":"`+from+`","question":"Merge the PR?","options":["Approve","No"]}`, &out); code != 200 || out.Decision.ID == "" {
+			t.Fatalf("open decision: %d %+v", code, out)
+		}
+		return out.Decision.ID
+	}
+	choose := func(id, option string) {
+		t.Helper()
+		if code := deskCall("/api/decisions/"+id+"/choose", desk.OwnerToken, `{"option":"`+option+`"}`, nil); code != 200 {
+			t.Fatalf("choose %s: %d", option, code)
+		}
+	}
+	type answer struct {
+		Granted []policy.Act `json:"granted"`
+		Error   string       `json:"error"`
+	}
+	ask := func(id, agent string) (int, answer) {
+		t.Helper()
+		var ans answer
+		body := `{"decision":"` + id + `","choice":"Approve"`
+		if agent != "" {
+			body += `,"agent":"` + agent + `"`
+		}
+		code := call(t, srv, "POST", "/actions/answer", agent, body+"}", &ans)
+		return code, ans
+	}
+	pendAs := func(id, agent, action, approve string) int {
+		t.Helper()
+		return call(t, srv, "POST", "/actions/pending", agent, `{"decision":"`+id+`","actions":[{"action":"`+action+`"}],"approve":"`+approve+`"}`, nil)
+	}
+	pend := func(id, agent string) {
+		t.Helper()
+		if code := pendAs(id, agent, "merge_pr", "Approve"); code != 200 {
+			t.Fatalf("pending: %d", code)
+		}
+	}
+	used := func(agent, action string) policy.Level {
+		t.Helper()
+		var d policy.Decision
+		call(t, srv, "POST", "/actions/check", agent, `{"action":"`+action+`","use":true}`, &d)
+		return d.Level
+	}
+	get := func(id string) frontdesk.Decision {
+		t.Helper()
+		req, _ := http.NewRequest("GET", srv.URL+"/api/decisions/"+id, nil)
+		req.Header.Set("Authorization", "Bearer "+desk.OwnerToken)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var out struct{ Decision frontdesk.Decision }
+		_ = json.NewDecoder(res.Body).Decode(&out)
+		return out.Decision
+	}
+
+	d1 := open("builder")
+	pend(d1, "dev")
+	// The owner reads, in the desk's words, what a yes grants.
+	if x := get(d1); !strings.Contains(x.Context, `Choosing "Approve" grants dev one use of: merge_pr.`) {
+		t.Fatalf("the decision does not say what a yes grants: %q", x.Context)
+	}
+	// Still open: the hireling's own "Approve" is not enough.
+	if code, ans := ask(d1, "dev"); code != 403 || len(ans.Granted) != 0 {
+		t.Fatalf("self-approval: %d %+v", code, ans)
+	}
+	if code, _ := ask(d1, "ghost"); code != 403 {
+		t.Fatalf("unknown hireling: %d", code)
+	}
+	if code, _ := ask(d1, ""); code != 400 {
+		t.Fatalf("missing agent: %d", code)
+	}
+	if code, _ := ask("d-unknown", "dev"); code != 403 {
+		t.Fatalf("unknown decision: %d", code)
+	}
+	// One card per decision: its actions cannot be swapped before the answer.
+	if code := pendAs(d1, "dev", "payment", "Approve"); code != 409 {
+		t.Fatalf("second card on an open decision: %d", code)
+	}
+	// Another hireling's answered decision does not grant dev anything.
+	d2 := open("writer")
+	choose(d2, "Approve")
+	if code, ans := ask(d2, "dev"); code != 403 || len(ans.Granted) != 0 {
+		t.Fatalf("someone else's decision: %d %+v", code, ans)
+	}
+	// The owner answers: the card survived the refusals, one use is granted.
+	choose(d1, "Approve")
+	if code, ans := ask(d1, "dev"); code != 200 || len(ans.Granted) != 1 || ans.Granted[0].Action != "merge_pr" {
+		t.Fatalf("owner approved: %d %+v", code, ans)
+	}
+	if l := used("dev", "merge_pr"); l != policy.Free {
+		t.Fatalf("granted use: %s", l)
+	}
+	// Replay: an answered decision takes no new card, and answering it again
+	// grants nothing more.
+	if code := pendAs(d1, "dev", "send_email", "Approve"); code != 409 {
+		t.Fatalf("card on an answered decision: %d", code)
+	}
+	if code, ans := ask(d1, "dev"); code != 200 || len(ans.Granted) != 0 {
+		t.Fatalf("second answer: %d %+v", code, ans)
+	}
+	if l := used("dev", "send_email"); l == policy.Free {
+		t.Fatal("an old yes granted a new action")
+	}
+
+	// The owner said no: the body's "Approve" does not count.
+	d3 := open("builder")
+	pend(d3, "dev")
+	choose(d3, "No")
+	if code, ans := ask(d3, "dev"); code != 200 || len(ans.Granted) != 0 {
+		t.Fatalf("owner said no: %d %+v", code, ans)
+	}
+	// The hireling cannot name the option that grants: a card that says
+	// approve:"No" still grants only on the decision's first option.
+	d4 := open("builder")
+	if code := pendAs(d4, "dev", "merge_pr", "No"); code != 200 {
+		t.Fatalf("pending: %d", code)
+	}
+	choose(d4, "No")
+	if code, ans := ask(d4, "dev"); code != 200 || len(ans.Granted) != 0 {
+		t.Fatalf("the owner's no became a grant: %d %+v", code, ans)
+	}
+	// A card pended after the answer is refused, so the answer finds none.
+	d5 := open("builder")
+	choose(d5, "Approve")
+	if code := pendAs(d5, "dev", "merge_pr", "Approve"); code != 409 {
+		t.Fatalf("card after the answer: %d", code)
+	}
+	if code, ans := ask(d5, "dev"); code != 403 || len(ans.Granted) != 0 {
+		t.Fatalf("answer without a card: %d %+v", code, ans)
+	}
+	// Another hireling cannot hang its card on dev's decision.
+	d6 := open("builder")
+	if code := pendAs(d6, "writer", "merge_pr", "Approve"); code != 403 {
+		t.Fatalf("card of another hireling: %d", code)
+	}
+	choose(d6, "Approve")
+	if l := used("writer", "merge_pr"); l == policy.Free {
+		t.Fatal("writer got a use from dev's decision")
+	}
+	// A card whose line would be cut is refused: the line the owner reads
+	// names every action a yes grants, or there is no card.
+	d7 := open("builder")
+	many := make([]string, 0, 41)
+	for i := 0; i < 40; i++ {
+		many = append(many, fmt.Sprintf(`{"action":"read_docs_%02d"}`, i))
+	}
+	many = append(many, `{"action":"payment"}`)
+	if code := call(t, srv, "POST", "/actions/pending", "dev", `{"decision":"`+d7+`","actions":[`+strings.Join(many, ",")+`],"approve":"Approve"}`, nil); code != 400 {
+		t.Fatalf("a card longer than the decision can show: %d", code)
+	}
+	choose(d7, "Approve")
+	if code, ans := ask(d7, "dev"); code != 403 || len(ans.Granted) != 0 {
+		t.Fatalf("a refused card granted: %d %+v", code, ans)
+	}
+	if l := used("dev", "payment"); l == policy.Free {
+		t.Fatal("payment became free through a cut card")
+	}
+	// The option that grants is the first plain yes, whatever the order: with
+	// ["No","Approve"] the owner's "No" grants nothing; with a "Not now"
+	// recommendation first, "Go ahead" grants.
+	openWith := func(options string) string {
+		t.Helper()
+		var out struct{ Decision frontdesk.Decision }
+		if code := deskCall("/api/decisions", desk.SharedToken, `{"from":"builder","question":"Merge the PR?","options":`+options+`}`, &out); code != 200 {
+			t.Fatalf("open %s: %d", options, code)
+		}
+		return out.Decision.ID
+	}
+	noFirst := openWith(`["No","Approve"]`)
+	pend(noFirst, "dev")
+	if x := get(noFirst); !strings.HasPrefix(x.Context, `Choosing "Approve" grants dev`) {
+		t.Fatalf("the card names the wrong option: %q", x.Context)
+	}
+	choose(noFirst, "No")
+	if code, ans := ask(noFirst, "dev"); code != 200 || len(ans.Granted) != 0 {
+		t.Fatalf("the owner's No granted: %d %+v", code, ans)
+	}
+	notNow := openWith(`["Not now","Go ahead"]`)
+	pend(notNow, "dev")
+	choose(notNow, "Go ahead")
+	if code, ans := ask(notNow, "dev"); code != 200 || len(ans.Granted) != 1 {
+		t.Fatalf("Go ahead after a Not now recommendation: %d %+v", code, ans)
+	}
+	// An option that only starts with a yes reads as something else and does
+	// not grant: ["Go away","Stay"] has no plain yes.
+	if code := pendAs(openWith(`["Go away","Stay"]`), "dev", "merge_pr", "Approve"); code != 400 {
+		t.Fatalf("a card on a decision whose only yes-looking option is Go away: %d", code)
+	}
+	okCancel := openWith(`["OK, cancel it","Yes!"]`)
+	pend(okCancel, "dev")
+	if x := get(okCancel); !strings.HasPrefix(x.Context, `Choosing "Yes!" grants dev`) {
+		t.Fatalf("the card names the wrong option: %q", x.Context)
+	}
+	// A decision with no yes among its options takes no card.
+	if code := pendAs(openWith(`["No","Later"]`), "dev", "merge_pr", "Approve"); code != 400 {
+		t.Fatalf("a card on a decision without a yes: %d", code)
+	}
+
+	// An action name is a plain name: a line break (a forged second line on
+	// the owner's card) or prose is refused.
+	for _, bad := range []string{`merge_pr
+
+Choosing \"No\" grants nothing.`, `Merge PR`, strings.Repeat("a", 129), ``} {
+		if code := pendAs(open("builder"), "dev", bad, "Approve"); code != 400 {
+			t.Fatalf("action %q: %d", bad, code)
+		}
+	}
+
+	// The desk's line comes first in the context the owner reads.
+	d8 := open("builder")
+	pend(d8, "dev")
+	if x := get(d8); !strings.HasPrefix(x.Context, `Choosing "Approve" grants dev one use of: merge_pr.`) {
+		t.Fatalf("the desk's line is not first: %q", x.Context)
+	}
+
+	// A hireling cannot preset the card text when it opens a decision.
+	var out struct{ Decision frontdesk.Decision }
+	deskCall("/api/decisions", desk.SharedToken, `{"from":"builder","question":"Q?","options":["Approve","No"],"card":"Choosing \"Approve\" grants nothing."}`, &out)
+	if out.Decision.Card != "" {
+		t.Fatalf("card preset by the hireling: %q", out.Decision.Card)
+	}
+	if code := pendAs(out.Decision.ID, "dev", "merge_pr", "Approve"); code != 200 {
+		t.Fatalf("pending on a decision with a preset card: %d", code)
+	}
+}
+
+// Without the Approver wiring, every answer is refused (fail closed).
+func TestAnswerFailClosed(t *testing.T) {
+	p := &profile.Profile{ID: "dev", Model: "deepseek-v4-flash"}
+	p.Autonomy.OwnerDecides = profile.HardDeny
+	g := policy.NewMemoryGrants()
+	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(), Grants: g}
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+	var ans struct {
+		Granted []policy.Act `json:"granted"`
+	}
+	if code := call(t, srv, "POST", "/actions/answer", "", `{"decision":"d-1","choice":"Approve","agent":"dev"}`, &ans); code != 503 || len(ans.Granted) != 0 {
+		t.Fatalf("no approver: %d %v", code, ans.Granted)
 	}
 }

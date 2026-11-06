@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/Play-Hireling/hireling/runtime/internal/bar"
@@ -140,10 +141,40 @@ func (l *Loop) handleBatch(ctx context.Context, msgs []bar.Message) {
 			l.notePeak(ctx)
 			continue
 		}
+		mctx := ctx
+		if l.Profile.Budget.TokensPerDay > 0 {
+			// D7 in-turn: the gate hook stops a P2/P3 turn that crosses the
+			// budget. The priority rides on this message's ctx, so no other
+			// turn (the owner's command taking the lock first) can pick it up.
+			mctx = withTurnPrio(ctx, fmt.Sprintf("P%d", l.priority(ctx, m)))
+		}
 		delete(l.budget.rank, m.ID)
-		l.HandleMessage(ctx, m)
+		l.HandleMessage(mctx, m)
 		l.spentTurn()
 	}
+}
+
+// turnPrioKey carries a turn's priority (P0–P3) in its ctx for the D7
+// in-turn cut: a bar message's from handleBatch, the B10 morning turn's P3.
+type turnPrioKey struct{}
+
+// withTurnPrio gives the turn run with ctx its priority.
+func withTurnPrio(ctx context.Context, prio string) context.Context {
+	return context.WithValue(ctx, turnPrioKey{}, prio)
+}
+
+// turnBudget is what the gate hook needs to cut a turn over the day's token
+// budget (D7): the work's priority, from the ctx the turn runs with, and the
+// profile's tokens_per_day. Nothing without a budget; no priority in the ctx
+// is the owner's command or an alert (P0).
+func (l *Loop) turnBudget(ctx context.Context) (prio string, perDay int) {
+	if l.Profile.Budget.TokensPerDay <= 0 {
+		return "", 0
+	}
+	if p, _ := ctx.Value(turnPrioKey{}).(string); p != "" {
+		return p, l.Profile.Budget.TokensPerDay
+	}
+	return "P0", l.Profile.Budget.TokensPerDay
 }
 
 // notePeak tells the tavern once per peak window that routines wait (D9).

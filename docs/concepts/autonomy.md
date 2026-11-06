@@ -75,7 +75,7 @@ Be precise about what is a hard guarantee today and what relies on the model fol
 | Every free/capped action is logged | Autonomy Log in tavern-core (D4) | **Enforced** — an action that cannot be logged does not run |
 | Off-peak routines | P3 bar work waits out DeepSeek's peak hours (D9) | **Enforced** — at most 4 h; P0–P2 never wait |
 | Daily web-call budget | the gate hook counts `web_search`/`web_extract` against `web_calls_per_day` (D8) | **Enforced** — past it the call is blocked (`budget`) until 00:00 UTC; not a card for you |
-| Daily token budget | recorded per turn; over `tokens_per_day` the runtime runs only P0/P1 (D7) | **Enforced** — your commands and answers, P0/P1 tasks and alerts run; other bar work waits, unacked, until 00:00 UTC |
+| Daily token budget | recorded per turn; over `tokens_per_day` the runtime runs only P0/P1 (D7) | **Enforced** — your commands and answers, P0/P1 tasks and alerts run; other bar work waits, unacked, until 00:00 UTC. A P2/P3 turn that crosses the budget is cut between tool calls (at most one model call late) |
 
 The defence against a model that ignores its prompt is that the dangerous capabilities are not there to use: no route to the host, no account toolkit, no delete tool, no money. Give a hireling a capability only when its profile and your comfort allow it.
 
@@ -108,7 +108,7 @@ With `"use": true` the check is the real thing, just before the action runs:
 - `capped` counts the use in its window (UTC day or ISO week, D2) and runs while under the cap;
 - at the cap, or for an `owner` action, it is blocked — and the block is remembered so it can ride on the hireling's next `ask` card.
 
-**Your yes is the way through.** When you approve the card, each action it carried gets **one use within 24 hours** for that hireling only; the next check consumes it. Everything lives in tavern-core, so a hireling cannot write itself a permission.
+**Your yes is the way through.** When you approve the card, each action it carried gets **one use within 24 hours** for that hireling only; the next check consumes it. Everything lives in tavern-core, so a hireling cannot write itself a permission: the card is tied to one open decision of that hireling before you answer, the Front Desk writes on the decision what a yes grants (`Choosing "Yes" grants dev one use of: merge_pr.`), and tavern-core grants only when the Front Desk shows that **you** chose that option (only the owner token can answer). An answered decision takes no new card, so an old yes is never reused. Read that line before you approve: it, not the hireling's question, says what the yes allows.
 
 A cap of `0` means *none without you*, never "unlimited". A cap given in dollars (for example `ad_spend_usd`) cannot be counted from a tool call, so every spend is yours until the gate can read the amount.
 

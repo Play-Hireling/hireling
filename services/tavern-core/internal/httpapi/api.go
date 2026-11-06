@@ -8,8 +8,9 @@
 //	POST /actions/check               policy gate → free | capped | owner ("use": count a capped use (D2), consume the owner's grant, remember a block)
 //	GET  /agents/{id}/blocked?since=  actions the gate blocked for a hireling (to attach to its card)
 //	POST /actions/pending             a decision card that grants those actions if the owner says yes
-//	POST /actions/answer              the owner's choice on that card → the actions granted (one use each)
+//	POST /actions/answer              the owner's choice on that card → the actions granted (one use each), only after the Front Desk confirms the owner's answer
 //	                                  action "web_call" (D8): counted against the profile's web_calls_per_day → free | budget
+//	                                  action "tokens" (D7, with turn_tokens): today's tokens + the running turn's against tokens_per_day → free | budget
 //	GET  /autonomy?day=&agent=&limit= the Autonomy Log (D4): who, what, why, outcome, turn cost
 //	POST /asks                        D11: before a card opens — yours (send it back) | joined (open card on the task) | ask
 //	POST /asks/opened                 the card the runtime opened (one per task)
@@ -44,6 +45,7 @@ import (
 
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/asks"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/autonomy"
+	"github.com/Play-Hireling/hireling/services/tavern-core/internal/frontdesk"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/goal"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/policy"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/tasks"
@@ -60,9 +62,12 @@ type Server struct {
 	// Log is the Autonomy Log (D4; nil = off): every "use" check is written.
 	Log autonomy.Store
 	// Asks is the book of questions to the owner (D11; nil = off: every ask opens a card).
-	Asks  asks.Store
-	Ready func() error     // store ping
-	Now   func() time.Time // defaults to time.Now
+	Asks asks.Store
+	// Approvals proves the owner's answer against the Front Desk before a
+	// grant (nil = off: /actions/answer refuses every grant, fail closed).
+	Approvals Approver
+	Ready     func() error     // store ping
+	Now       func() time.Time // defaults to time.Now
 	// Extra registers more routes on the same mux (the Front Desk).
 	Extra func(*http.ServeMux)
 	// Owner reports whether a request carries the owner token (the Front
@@ -70,6 +75,30 @@ type Server struct {
 	// /api/quest; nil = those routes answer 401 to everyone.
 	Owner func(*http.Request) bool
 }
+
+// Approver ties a gate card to the owner's decision and proves the answer
+// (D1/D3). The Front Desk implements it.
+//   - Bind attaches the card's actions to an open decision deskID opened,
+//     once, before the owner answers; it states on the decision what a yes
+//     grants and returns the option that grants.
+//   - Confirm returns the option the owner chose and the one that grants,
+//     once the decision is answered.
+//
+// An unknown, open or foreign decision, or one without a card, is
+// ErrNotApproved; a card for an answered decision is ErrDecided, a second
+// card ErrBound.
+type Approver interface {
+	Bind(ctx context.Context, decision, agent, deskID string, actions []string) (approve string, err error)
+	Confirm(ctx context.Context, decision, agent, deskID string) (chosen, approve string, err error)
+}
+
+// ErrNotApproved is what an Approver returns (wrapped) when the decision is
+// not one the owner answered for this hireling: the handler answers 403.
+var ErrNotApproved = frontdesk.ErrNotApproved
+
+// ErrApprovalsOff is the 503 when no Approver is set: the gate stays closed,
+// it never falls back to trusting the body.
+var ErrApprovalsOff = errors.New("approvals: no Front Desk to confirm the answer, so nothing is granted")
 
 func (s *Server) now() time.Time {
 	if s.Now != nil {
@@ -304,8 +333,12 @@ func (s *Server) check(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Agent = agent(r, req.Agent)
 	action := strings.ToLower(strings.TrimSpace(req.Action))
-	if action == WebCall {
+	switch action {
+	case WebCall:
 		s.webCall(w, r, req)
+		return
+	case Tokens:
+		s.tokens(w, r, req)
 		return
 	}
 	d := s.Gate.Check(req)
@@ -473,6 +506,38 @@ func (s *Server) pending(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "grants are off"})
 		return
 	}
+	if s.Approvals == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": ErrApprovalsOff.Error()})
+		return
+	}
+	prof := s.Gate.Profile(p.Agent)
+	if prof == nil {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "unknown hireling: " + p.Agent})
+		return
+	}
+	// The card is tied to the decision now, while it is open: an answered
+	// decision takes no new card (an old yes is not reused), a decision takes
+	// one card (its actions are not swapped while the owner reads it), and the
+	// option that grants comes from the decision, not from the hireling.
+	names := make([]string, 0, len(p.Actions))
+	for _, a := range p.Actions {
+		names = append(names, a.Action)
+	}
+	approve, err := s.Approvals.Bind(r.Context(), p.Decision, p.Agent, prof.DeskID, names)
+	if err != nil {
+		code := http.StatusServiceUnavailable
+		switch {
+		case errors.Is(err, ErrNotApproved):
+			code = http.StatusForbidden
+		case errors.Is(err, frontdesk.ErrDecided), errors.Is(err, frontdesk.ErrBound):
+			code = http.StatusConflict
+		case errors.Is(err, frontdesk.ErrCardTooLong), errors.Is(err, frontdesk.ErrNotAffirmative), errors.Is(err, frontdesk.ErrBadAction):
+			code = http.StatusBadRequest
+		}
+		writeJSON(w, code, map[string]string{"error": err.Error()})
+		return
+	}
+	p.Approve = approve
 	if err := s.Grants.Pend(r.Context(), p); err != nil {
 		fail(w, err)
 		return
@@ -484,14 +549,51 @@ func (s *Server) answer(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Decision string `json:"decision"`
 		Choice   string `json:"choice"`
+		Agent    string `json:"agent"`
 	}
 	if err := decode(r, &in); err != nil {
 		fail(w, err)
 		return
 	}
+	agent := strings.TrimSpace(in.Agent)
+	if agent == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "body must be {decision, choice, agent}"})
+		return
+	}
+	if s.Approvals == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": ErrApprovalsOff.Error()})
+		return
+	}
+	p := s.Gate.Profile(agent)
+	if p == nil {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "unknown hireling: " + agent})
+		return
+	}
+	// The body proves nothing: a hireling can reach tavern-core, but only the
+	// owner token can answer on the Front Desk. The grant follows the answer
+	// the desk recorded, never the choice in the body: only the option that
+	// grants (the decision's first) is a yes; any other answer uses up the
+	// card and grants nothing.
+	chosen, approve, err := s.Approvals.Confirm(r.Context(), in.Decision, agent, p.DeskID)
+	if err != nil {
+		code := http.StatusServiceUnavailable
+		if errors.Is(err, ErrNotApproved) {
+			code = http.StatusForbidden
+		}
+		writeJSON(w, code, map[string]string{"error": err.Error()})
+		return
+	}
 	granted := []policy.Act{}
-	if s.Grants != nil && in.Decision != "" {
-		acts, err := policy.Answer(r.Context(), s.Grants, in.Decision, in.Choice)
+	if s.Grants != nil {
+		yes := ""
+		if strings.EqualFold(strings.TrimSpace(chosen), strings.TrimSpace(approve)) {
+			yes = approve
+		}
+		acts, err := policy.AnswerFor(r.Context(), s.Grants, in.Decision, agent, yes)
+		if errors.Is(err, policy.ErrOtherAgent) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+			return
+		}
 		if err != nil && !errors.Is(err, policy.ErrNoPending) {
 			fail(w, err)
 			return
@@ -1049,4 +1151,50 @@ func (s *Server) webUsed(r *http.Request, agent string) int {
 		return 0
 	}
 	return n
+}
+
+// ---- D7: token budget inside a turn ------------------------------------------
+
+// Tokens is the action the gate hook checks before every tool call of a P2/P3
+// turn (the runtime does not ask for P0/P1 work, which runs over budget). The
+// usage record of a turn only arrives when it ends, so the hook sends the
+// running turn's spend as `turn_tokens`.
+const Tokens = "tokens"
+
+// tokens answers a D7 check: today's recorded tokens plus the running turn's
+// against the profile's tokens_per_day (0 = no budget). Under it the call is
+// Free and stays out of the Autonomy Log, like a web call within its budget;
+// at or over it the level is "budget" and the refusal is logged. A refusal
+// that cannot be logged is still a refusal: nothing runs either way.
+func (s *Server) tokens(w http.ResponseWriter, r *http.Request, req policy.Request) {
+	p := s.Gate.Profile(req.Agent)
+	if p == nil {
+		writeJSON(w, http.StatusOK, policy.Decision{Level: policy.Owner, Reason: "unknown agent"})
+		return
+	}
+	limit := p.Budget.TokensPerDay
+	if limit <= 0 {
+		writeJSON(w, http.StatusOK, policy.Decision{Level: policy.Free, Reason: "no token budget in the profile"})
+		return
+	}
+	day, err := s.today(r, p.ID)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	turn := max(req.TurnTokens, 0)
+	used := day.Totals.Tokens() + turn
+	if used < int64(limit) {
+		writeJSON(w, http.StatusOK, policy.Decision{Level: policy.Free, Reason: fmt.Sprintf("tokens %d/%d today (D7)", used, limit),
+			Limit: limit, Period: "day", Used: int(used)})
+		return
+	}
+	d := policy.Decision{Level: policy.Budget, Limit: limit, Period: "day", Used: int(used),
+		Reason: fmt.Sprintf("daily token budget reached (D7): %d/%d tokens today, %d of them in this turn; resets at 00:00 UTC", used, limit, turn)}
+	if req.Use && s.Log != nil {
+		e := autonomy.Entry{At: s.now(), Agent: req.Agent, Action: Tokens, Target: req.Target, Outcome: "blocked",
+			Level: string(d.Level), Reason: d.Reason, Used: d.Used, Limit: limit, Period: "day", Why: req.Why, Turn: req.Turn, Task: req.Task}
+		_ = s.Log.Append(r.Context(), e)
+	}
+	writeJSON(w, http.StatusOK, d)
 }

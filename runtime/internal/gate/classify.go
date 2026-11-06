@@ -64,7 +64,9 @@ type Env struct {
 // controlFiles configure Hermes and this gate. A hireling runs as the same
 // user as Hermes, so the hook itself refuses any tool call that touches them
 // (removing the hook from config.yaml would unregister it within ~30 s).
-var controlFiles = []string{"config.yaml", "config.yml", ".env", "shell-hooks-allowlist.json", "agent-hooks", "hireling-prompt.md"}
+// The turn file and Hermes' session store are what the D7 budget check reads
+// (the turn's priority, its spend so far).
+var controlFiles = []string{"config.yaml", "config.yml", ".env", "shell-hooks-allowlist.json", "agent-hooks", "hireling-prompt.md", TurnFile, "state.db"}
 
 // controlWords name the gate's switches anywhere in a command.
 var controlWords = regexp.MustCompile(`(?i)shell-hooks-allowlist|agent-hooks|hooks_auto_accept|hermes_accept_hooks|accept-hooks|\$\{?hermes_home\}?|~/\.hermes\b`)

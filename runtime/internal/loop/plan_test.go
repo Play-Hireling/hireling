@@ -292,7 +292,9 @@ func TestPlanReadFromSessionStore(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := conn.Exec(`INSERT INTO sessions VALUES ('local-x','oneshot',?)`, float64(time.Now().Add(2*time.Second).UnixNano())/1e9); err != nil {
+	// An hour ahead: the session must start after the turn whatever the setup
+	// costs (the loop reads answers from sessions started since the turn).
+	if _, err := conn.Exec(`INSERT INTO sessions VALUES ('local-x','oneshot',?)`, float64(time.Now().Add(time.Hour).UnixNano())/1e9); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := conn.Exec(`INSERT INTO messages (session_id, role, content) VALUES ('local-x','assistant',?)`, innkeeperAnswer); err != nil {

@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/Play-Hireling/hireling/runtime/internal/plan"
 	"github.com/Play-Hireling/hireling/runtime/internal/tavern"
 )
 
@@ -19,6 +21,45 @@ type GateGrants interface {
 	RecentBlocked(ctx context.Context, since time.Time) ([]GateAct, error)
 	Pend(ctx context.Context, decision string, acts []GateAct, approve string) error
 	Answer(ctx context.Context, decision, choice string) ([]GateAct, error)
+}
+
+// yesWord is an option that is a plain yes and nothing else, as the Front
+// Desk reads it (frontdesk.plainYes in tavern-core: keep the two lists the
+// same): the card is granted on the first such option.
+var yesWord = regexp.MustCompile(`(?i)^\s*(approve|approved|yes|ok|okay|go|go ahead|do it|allow|confirm)\s*[.!]?\s*$`)
+
+// cardName is an action name the Front Desk accepts on a card
+// (frontdesk.actionName in tavern-core: keep the two the same).
+var cardName = regexp.MustCompile(`^[a-z0-9_.:-]{1,128}$`)
+
+// cardable splits the blocked actions into those a card can carry and the
+// names it cannot.
+func cardable(acts []GateAct) (keep []GateAct, off []string) {
+	for _, a := range acts {
+		if cardName.MatchString(a.Action) {
+			keep = append(keep, a)
+		} else {
+			off = append(off, a.Action)
+		}
+	}
+	return keep, off
+}
+
+// withYes makes sure a card that carries blocked actions offers a plain yes:
+// without one tavern-core refuses the card and the owner's answer could grant
+// nothing. "Approve" is added (in place of the last option when all six are
+// taken).
+func withYes(options []string) []string {
+	for _, o := range options {
+		if yesWord.MatchString(o) {
+			return options
+		}
+	}
+	out := append([]string{}, options...)
+	if len(out) >= plan.MaxOptions {
+		out = out[:plan.MaxOptions-1]
+	}
+	return append(out, "Approve")
 }
 
 // grantLine is the line on the owner's card that says what a yes allows.
@@ -53,9 +94,12 @@ func actNames(acts []GateAct) string {
 	return strings.Join(n, ", ")
 }
 
-// writeGateTurn tells the gate hook which turn is running (D4). Best effort:
-// the log loses the turn link, never the action.
-func (l *Loop) writeGateTurn(id, task, text string) {
+// writeGateTurn tells the gate hook which turn is running (D4) and, with a
+// token budget, the work's priority and tokens_per_day, so the hook can stop
+// a P2/P3 turn that crosses the budget (D7). Best effort: the log loses the
+// turn link and the turn is only held to the budget between turns, never the
+// action.
+func (l *Loop) writeGateTurn(ctx context.Context, id, task, text string) {
 	if l.GateTurnFile == "" {
 		return
 	}
@@ -63,8 +107,13 @@ func (l *Loop) writeGateTurn(id, task, text string) {
 	if l.Redactor != nil {
 		topic = l.Redactor.Summary(text)
 	}
-	raw, _ := json.Marshal(map[string]string{"turn": id, "task": task, "topic": topic, "at": time.Now().UTC().Format(time.RFC3339)})
+	t := map[string]any{"turn": id, "task": task, "topic": topic, "at": time.Now().UTC().Format(time.RFC3339Nano)}
+	if prio, perDay := l.turnBudget(ctx); perDay > 0 {
+		t["priority"], t["tokens_per_day"] = prio, perDay
+	}
+	raw, _ := json.Marshal(t)
 	if err := os.WriteFile(l.GateTurnFile, raw, 0o640); err != nil {
 		l.logf("gate turn file: %v", err)
+		_ = os.Remove(l.GateTurnFile) // never leave the last turn's start and priority behind
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -83,6 +84,30 @@ func Answer(ctx context.Context, g Grants, decision, choice string) ([]Act, erro
 	if err != nil {
 		return nil, err
 	}
+	return grantCard(ctx, g, p, choice)
+}
+
+// ErrOtherAgent means the card of that decision is pending for another
+// hireling: it is left in place, nothing is granted.
+var ErrOtherAgent = errors.New("policy: this decision's card belongs to another hireling")
+
+// AnswerFor is Answer for one hireling: the pending card must be agent's.
+// A card pending for someone else stays where it is.
+func AnswerFor(ctx context.Context, g Grants, decision, agent, choice string) ([]Act, error) {
+	p, err := g.TakePending(ctx, decision)
+	if err != nil {
+		return nil, err
+	}
+	if p.Agent != agent {
+		if perr := g.Pend(ctx, p); perr != nil {
+			return nil, perr
+		}
+		return nil, fmt.Errorf("%w (%s)", ErrOtherAgent, decision)
+	}
+	return grantCard(ctx, g, p, choice)
+}
+
+func grantCard(ctx context.Context, g Grants, p Pending, choice string) ([]Act, error) {
 	if !Approves(choice, p.Approve) {
 		return nil, nil
 	}

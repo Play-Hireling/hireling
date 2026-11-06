@@ -127,14 +127,15 @@ func TestPendErrors(t *testing.T) {
 	wantHTTPError(t, c.Pend(context.Background(), "d-1", []GateAct{{Action: "x"}}, "Yes"), "503", "grants are off")
 }
 
-// A yes returns the actions the owner granted.
+// The answer names the hireling, so tavern-core can check the Front Desk's
+// record of the owner's choice; a yes returns the actions granted.
 func TestAnswer(t *testing.T) {
 	c, f := serve(t, http.StatusOK, `{"granted":[{"action":"open_pr","target":"my-app","at":"2026-11-05T14:30:00Z"}]}`)
 	got, err := c.Answer(context.Background(), "d-1", "Yes, go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantPost(t, f.last(t), "/actions/answer", map[string]any{"decision": "d-1", "choice": "Yes, go"})
+	wantPost(t, f.last(t), "/actions/answer", map[string]any{"decision": "d-1", "choice": "Yes, go", "agent": "dev"})
 	want := []GateAct{{Action: "open_pr", Target: "my-app", At: time.Date(2026, 11, 5, 14, 30, 0, 0, time.UTC)}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("granted = %+v", got)

@@ -17,19 +17,37 @@ var patterns = []*regexp.Regexp{
 	// Bearer / Basic tokens and explicit key=value secrets.
 	regexp.MustCompile(`(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}`),
 	regexp.MustCompile(`(?i)\b(api[_-]?key|token|secret|password|passwd|pwd|senha|chave)\s*[:=]\s*\S+`),
+	// Environment-style secrets: DEEPSEEK_API_KEY=…, GITHUB_TOKEN=….
+	regexp.MustCompile(`\b[A-Z][A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD)\s*=\s*\S+`),
 	// Well-known key shapes.
 	regexp.MustCompile(`\bsk-[A-Za-z0-9]{16,}\b`),
 	regexp.MustCompile(`\bgh[pousr]_[A-Za-z0-9]{20,}\b`),
 	regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9_]{20,}\b`),
 	regexp.MustCompile(`\bgbrain_[A-Za-z0-9_-]{16,}\b`),
-	regexp.MustCompile(`\bxox[abp]-[A-Za-z0-9-]{10,}\b`),
-	regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`),
+	regexp.MustCompile(`\bxox[abprs]-[A-Za-z0-9-]{10,}\b`),
+	regexp.MustCompile(`\b(?:AKIA|ASIA)[0-9A-Z]{16}\b`), // AWS, long-lived and temporary
+	regexp.MustCompile(`\bhf_[A-Za-z0-9]{30,}\b`),       // Hugging Face
+	regexp.MustCompile(`\bglpat-[A-Za-z0-9_-]{20,}`),    // GitLab
+	regexp.MustCompile(`\bSK[0-9a-fA-F]{32}\b`),         // Twilio API key
+	regexp.MustCompile(`https://hooks\.slack\.com/[A-Za-z0-9/_-]+`),
+	// Short provider keys: Composio (ak_, 23 chars), Google (AIza), Stripe
+	// (sk_/rk_, live and test).
+	regexp.MustCompile(`\bak_[A-Za-z0-9]{16,}\b`),
+	regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{30,}\b`),
+	regexp.MustCompile(`\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}\b`),
+	// A full JWT (header.payload.signature), not just its payload.
+	regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`),
+	// A private key in PEM form, whole; a cut one (BEGIN without END) from
+	// its header to the end of the text.
+	pemKey,
+	pemCut,
 	// Long opaque strings (hex / base64) are almost always credentials.
 	regexp.MustCompile(`\b[A-Fa-f0-9]{32,}\b`),
 	longBlob,
-	// URLs with embedded credentials or tokens.
+	// URLs with embedded credentials or tokens, on any scheme (postgres://,
+	// redis://, amqp://, mysql:// — the GBrain database URL looks like this).
+	regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s/@]*:[^\s/@]+@`),
 	regexp.MustCompile(`(?i)https?://[^\s]*(?:token|key|secret|password)=[^\s&]+`),
-	regexp.MustCompile(`(?i)https?://[^\s/@]+:[^\s/@]+@`),
 }
 
 // Redactor masks secret values known at runtime (the environment) and
@@ -53,6 +71,12 @@ func New(values ...string) *Redactor {
 // pattern that lets a path through (looksLikePath).
 var longBlob = regexp.MustCompile(`\b[A-Za-z0-9+/_-]{40,}={0,2}\b`)
 
+// pemKey catches a private key from -----BEGIN to -----END, across lines.
+var pemKey = regexp.MustCompile(`(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----`)
+
+// pemCut catches what is left of a private key whose END line was cut off.
+var pemCut = regexp.MustCompile(`(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*`)
+
 // Text masks secrets in s. It never truncates.
 func (r *Redactor) Text(s string) string {
 	for _, v := range r.known {
@@ -70,7 +94,7 @@ func (r *Redactor) Text(s string) string {
 }
 
 // looksLikePath spots a file path or Ledger slug such as
-// brain/decisions/2026-11-04-gbrain-on-ny1 or /tavern/shared/T-12/reply.md:
+// brain/decisions/2026-11-04-gbrain-on-the-box or /tavern/shared/T-12/reply.md:
 // long, but not a secret. A segment that looks random (16+ chars mixing
 // upper case, lower case and digits) keeps the whole match masked.
 func looksLikePath(m string) bool {

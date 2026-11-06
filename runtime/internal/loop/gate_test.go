@@ -114,3 +114,30 @@ func TestTurnFileForTheGate(t *testing.T) {
 		t.Fatalf("turn file = %s (%v)", raw, err)
 	}
 }
+
+// A card that carries blocked actions offers a plain yes, which tavern-core
+// grants on; options that already have one are left as they are.
+func TestWithYes(t *testing.T) {
+	for _, c := range []struct{ in, want []string }{
+		{[]string{"Merge now", "Wait"}, []string{"Merge now", "Wait", "Approve"}},
+		{[]string{"Not now", "Go ahead"}, []string{"Not now", "Go ahead"}},
+		{[]string{"Yes, merge", "No"}, []string{"Yes, merge", "No", "Approve"}}, // only a plain yes grants
+		{[]string{"a", "b", "c", "d", "e", "f"}, []string{"a", "b", "c", "d", "e", "Approve"}},
+		{[]string{"Okra soup", "Gopher"}, []string{"Okra soup", "Gopher", "Approve"}},
+		{[]string{"Go away", "OK, cancel it"}, []string{"Go away", "OK, cancel it", "Approve"}},
+		{[]string{"Yes.", "No"}, []string{"Yes.", "No"}},
+	} {
+		if got := withYes(c.in); strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("withYes(%v) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
+// A blocked action whose name the Front Desk would refuse is left off the
+// card, so the card can still carry the rest.
+func TestCardableLeavesOffUnfitNames(t *testing.T) {
+	keep, off := cardable([]GateAct{{Action: strings.Repeat("x", 129)}, {Action: "merge_pr"}, {Action: "Bad Name"}})
+	if len(keep) != 1 || keep[0].Action != "merge_pr" || len(off) != 2 {
+		t.Fatalf("keep %v off %v", keep, off)
+	}
+}

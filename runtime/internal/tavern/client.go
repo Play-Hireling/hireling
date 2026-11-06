@@ -332,7 +332,7 @@ func (c *Client) Answer(ctx context.Context, decision, choice string) ([]GateAct
 	var out struct {
 		Granted []GateAct `json:"granted"`
 	}
-	if err := c.post(ctx, "/actions/answer", map[string]string{"decision": decision, "choice": choice}, &out); err != nil {
+	if err := c.post(ctx, "/actions/answer", map[string]string{"decision": decision, "choice": choice, "agent": c.Agent}, &out); err != nil {
 		return nil, err
 	}
 	return out.Granted, nil

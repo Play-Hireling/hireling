@@ -437,7 +437,7 @@ func (l *Loop) turnOn(ctx context.Context, id, task, after, text string) (res tu
 	}
 	started := time.Now()
 	res.started = started
-	l.writeGateTurn(id, task, text)
+	l.writeGateTurn(ctx, id, task, text)
 	l.lastLatency = [2]time.Duration{}
 	if rs, ok := l.Turner.(reasoner); ok {
 		rs.SetReasoning(l.chatReasoning(task))
@@ -1055,6 +1055,13 @@ func (l *Loop) applyAsk(ctx context.Context, task, turn, answer string, since ti
 		if blocked, err = l.Gate.RecentBlocked(ctx, since.Add(-2*time.Second)); err != nil {
 			l.logf("ask: gate blocks: %v", err)
 		}
+		// The Front Desk refuses a card over a name it would not show: leave
+		// such an action off (it stays blocked) instead of losing the card.
+		var off []string
+		blocked, off = cardable(blocked)
+		if len(off) > 0 {
+			l.logf("ask: %d blocked action(s) left off the card, still blocked: %s", len(off), strings.Join(off, ", "))
+		}
 	}
 	// D11: autonomy first — tavern-core says whether this ask is the owner's.
 	if out, waiting, done := l.preAsk(ctx, a, task, turn, rest, len(blocked) > 0); done {
@@ -1071,7 +1078,13 @@ func (l *Loop) applyAsk(ctx context.Context, task, turn, answer string, since ti
 			ctxText = strings.TrimSpace(ctxText + "\n\n" + line)
 		}
 	}
-	id, err := l.Client.RequestDecision(ctx, frontdesk.DecisionRequest{From: l.Profile.DeskID, Question: a.Question, Options: a.Options, Context: l.Redactor.Text(ctxText), Urgency: a.Urgency})
+	options := a.Options
+	if len(blocked) > 0 {
+		// D1: tavern-core grants the card on the first plain yes among the
+		// options; a card without one could never be granted.
+		options = withYes(options)
+	}
+	id, err := l.Client.RequestDecision(ctx, frontdesk.DecisionRequest{From: l.Profile.DeskID, Question: a.Question, Options: options, Context: l.Redactor.Text(ctxText), Urgency: a.Urgency})
 	if err != nil {
 		l.logf("ask: %v", err)
 		return rest + "\n\n(decision not opened: " + l.Redactor.Summary(err.Error()) + ")", ""
