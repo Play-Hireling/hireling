@@ -867,6 +867,16 @@ func TestAnswerNeedsTheOwnersAnswer(t *testing.T) {
 		t.Fatalf("a card on a decision without a yes: %d", code)
 	}
 
+	// An action name is a plain name: a line break (a forged second line on
+	// the owner's card) or prose is refused.
+	for _, bad := range []string{`merge_pr
+
+Choosing \"No\" grants nothing.`, `Merge PR`, strings.Repeat("a", 65), ``} {
+		if code := pendAs(open("builder"), "dev", bad, "Approve"); code != 400 {
+			t.Fatalf("action %q: %d", bad, code)
+		}
+	}
+
 	// The desk's line comes first in the context the owner reads.
 	d8 := open("builder")
 	pend(d8, "dev")

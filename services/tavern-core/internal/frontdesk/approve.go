@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/policy"
@@ -26,8 +27,16 @@ var (
 	// ErrNotAffirmative means no option of the decision is a plain yes: the
 	// option that grants is always one (Approve, Yes, OK …), so a hireling
 	// cannot make "No" the option that grants.
+	// ErrBadAction means an action's name is not a plain name: the names go
+	// verbatim into the line the owner reads, so a line break or prose could
+	// forge a second line.
+	ErrBadAction      = errors.New("frontdesk: an action name is a-z, 0-9 and _ . : - (at most 64 characters)")
 	ErrNotAffirmative = errors.New("frontdesk: the decision offers no yes (Approve, Yes, OK …) to grant on")
 )
+
+// actionName is what a card's action may be called: the gate's own names
+// (lower-cased tool and action names), nothing that could add a line.
+var actionName = regexp.MustCompile(`^[a-z0-9_.:-]{1,64}$`)
 
 // maxCard bounds the line tavern-core adds to a decision's context. The line
 // is never cut: a card that does not fit is refused.
@@ -42,6 +51,11 @@ func (d *Desk) Bind(ctx context.Context, decisionID, agent, deskID string, actio
 	decisionID, deskID = strings.TrimSpace(decisionID), strings.TrimSpace(deskID)
 	if decisionID == "" || deskID == "" || len(actions) == 0 {
 		return "", fmt.Errorf("%w: decision, desk id and actions are required", ErrNotApproved)
+	}
+	for _, a := range actions {
+		if !actionName.MatchString(a) {
+			return "", fmt.Errorf("%w: %q", ErrBadAction, a)
+		}
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
