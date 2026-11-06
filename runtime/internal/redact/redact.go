@@ -22,14 +22,24 @@ var patterns = []*regexp.Regexp{
 	regexp.MustCompile(`\bgh[pousr]_[A-Za-z0-9]{20,}\b`),
 	regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9_]{20,}\b`),
 	regexp.MustCompile(`\bgbrain_[A-Za-z0-9_-]{16,}\b`),
-	regexp.MustCompile(`\bxox[abp]-[A-Za-z0-9-]{10,}\b`),
+	regexp.MustCompile(`\bxox[abprs]-[A-Za-z0-9-]{10,}\b`),
 	regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`),
+	// Short provider keys: Composio (ak_, 23 chars), Google (AIza), Stripe
+	// live (sk_live_/rk_live_).
+	regexp.MustCompile(`\bak_[A-Za-z0-9]{16,}\b`),
+	regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{30,}\b`),
+	regexp.MustCompile(`\b[sr]k_live_[A-Za-z0-9]{16,}\b`),
+	// A full JWT (header.payload.signature), not just its payload.
+	regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`),
+	// A private key in PEM form, whole.
+	pemKey,
 	// Long opaque strings (hex / base64) are almost always credentials.
 	regexp.MustCompile(`\b[A-Fa-f0-9]{32,}\b`),
 	longBlob,
-	// URLs with embedded credentials or tokens.
+	// URLs with embedded credentials or tokens, on any scheme (postgres://,
+	// redis://, amqp://, mysql:// — the GBrain database URL looks like this).
+	regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s/@]*:[^\s/@]+@`),
 	regexp.MustCompile(`(?i)https?://[^\s]*(?:token|key|secret|password)=[^\s&]+`),
-	regexp.MustCompile(`(?i)https?://[^\s/@]+:[^\s/@]+@`),
 }
 
 // Redactor masks secret values known at runtime (the environment) and
@@ -53,6 +63,9 @@ func New(values ...string) *Redactor {
 // pattern that lets a path through (looksLikePath).
 var longBlob = regexp.MustCompile(`\b[A-Za-z0-9+/_-]{40,}={0,2}\b`)
 
+// pemKey catches a private key from -----BEGIN to -----END, across lines.
+var pemKey = regexp.MustCompile(`(?s)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----`)
+
 // Text masks secrets in s. It never truncates.
 func (r *Redactor) Text(s string) string {
 	for _, v := range r.known {
@@ -70,7 +83,7 @@ func (r *Redactor) Text(s string) string {
 }
 
 // looksLikePath spots a file path or Ledger slug such as
-// brain/decisions/2026-11-04-gbrain-on-ny1 or /tavern/shared/T-12/reply.md:
+// brain/decisions/2026-11-04-gbrain-on-the-box or /tavern/shared/T-12/reply.md:
 // long, but not a secret. A segment that looks random (16+ chars mixing
 // upper case, lower case and digits) keeps the whole match masked.
 func looksLikePath(m string) bool {

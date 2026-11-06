@@ -133,6 +133,23 @@ ORDER BY s.started_at, u.first_seen`
 	return out, len(sessions), nil
 }
 
+// Tokens is the running total of the sessions started at or after `since`
+// (input + cache read + output + reasoning, the sum tavern-core's budget
+// counts). Hermes queues each API call's token delta for its store as soon as
+// the response arrives, so mid-turn this is the turn's spend so far, at most
+// one call behind (D7's in-turn cut reads it from the gate hook).
+func (s *Store) Tokens(ctx context.Context, since time.Time) (int64, error) {
+	recs, _, err := s.Since(ctx, since)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	for _, r := range recs {
+		n += r.InputTokens + r.CacheReadTokens + r.OutputTokens + r.ReasoningTokens
+	}
+	return n, nil
+}
+
 // Answer returns the raw markdown of the turn's final reply: the last
 // assistant message with text and no tool calls, in the sessions started at or
 // after `since`. The `hermes chat -q` stdout renders markdown for a terminal

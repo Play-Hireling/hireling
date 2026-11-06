@@ -130,7 +130,7 @@ func main() {
 	if err := desk.Check(); err != nil {
 		logger.Fatalf("front desk: %v", err) // never prints a token
 	}
-	srv := &httpapi.Server{Gate: gate, Tasks: queue, Usage: spent, Goal: quests, Grants: grants, Log: autoLog, Asks: askBook, Ready: ready, Extra: desk.Register, Owner: desk.IsOwner}
+	srv := &httpapi.Server{Gate: gate, Tasks: queue, Usage: spent, Goal: quests, Grants: grants, Log: autoLog, Asks: askBook, Approvals: desk, Ready: ready, Extra: desk.Register, Owner: desk.IsOwner}
 	hs := &http.Server{
 		Addr:              env("TAVERN_ADDR", ":8080"),
 		Handler:           srv.Handler(),

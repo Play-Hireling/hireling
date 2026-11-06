@@ -22,7 +22,7 @@ tavern-core is the tavern's state: tasks with leases, priorities, the quest, usa
 | `POST /actions/check` | `{"agent","action","target","use","why","turn","task"}` | `{"level":"free|capped|owner|budget","reason","limit","period","used","counted"}` — action `web_call` is counted against `web_calls_per_day` (D8) |
 | `GET /agents/{id}/blocked?since=` | — | Actions the gate blocked for this hireling since an RFC 3339 time (to attach to its card) |
 | `POST /actions/pending` | `{"decision","agent","actions":[{"action","target"}],"approve"}` | The pending card |
-| `POST /actions/answer` | `{"decision","choice"}` | `{"granted":[…]}` — on a yes, one use of each action |
+| `POST /actions/answer` | `{"decision","choice","agent"}` | `{"granted":[…]}` — on a yes, one use of each action. The grant follows the Front Desk's record, not the body: the decision must have been opened by that hireling (`desk_id`) and answered by you, and the card must be that hireling's; the option you chose there is the answer (`choice` is ignored). `403` for an open, unknown or foreign decision (the card stays for your real answer), `400` without `agent` |
 | `GET /autonomy?day=&agent=&limit=` | — | `{"day","done","blocked","entries":[…]}` — the Autonomy Log (D4) |
 | `POST /asks` | `{"agent","task","turn","action","question","blocked"}` | `{"verdict":"yours|joined|ask","level","reason","decision","follow_ups"}` — D11, before a card opens |
 | `POST /asks/opened` | `{"agent","decision","task","action","question","recommended"}` | The recorded card (one per task) |

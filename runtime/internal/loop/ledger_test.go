@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/Play-Hireling/hireling/runtime/internal/redact"
 )
 
 // E3 — a ledger block goes to the writer and comes back as one line; a page
@@ -53,5 +55,33 @@ func TestApplyLedger(t *testing.T) {
 	}
 	if out := l.applyLedger(context.Background(), "plain answer"); out != "plain answer" {
 		t.Fatal(out)
+	}
+}
+
+// D6/A9 — the page that becomes a commit in the Ledger carries no secret: the
+// runtime redacts it first (a commit cannot be un-leaked).
+func TestLedgerPageIsRedacted(t *testing.T) {
+	var got map[string]string
+	w := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		got = map[string]string{}
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_, _ = rw.Write([]byte(`{"path":"brain/learnings/test/x.md","commit":"abc1234","author":"test"}`))
+	}))
+	defer w.Close()
+	_, h := newServer(t)
+	l := newLoop(h, &fakeTurner{})
+	l.Profile.Ledger.Write = []string{"learnings/test/*"}
+	l.LedgerWriter = w.URL
+	l.Redactor = redact.New()
+	page := "---\ntitle: X\nowner: test\ntags: [learning]\n---\n\nkey sk-abcdefghijklmnopqrstuvwxyz0123 and postgres://u:p@db:5432/x\n\n## Timeline\n- **2026-11-05** | test — saw it\n"
+	out := l.applyLedger(context.Background(), "ok\n\n````ledger learnings/test/x.md\n"+page+"````")
+	if strings.Contains(got["content"], "sk-abcdef") || strings.Contains(got["content"], "u:p@db") {
+		t.Fatalf("secret reached the writer: %q", got["content"])
+	}
+	if !strings.Contains(got["content"], redact.Hidden) {
+		t.Fatalf("nothing was masked: %q", got["content"])
+	}
+	if !strings.Contains(out, "Ledger: wrote") {
+		t.Fatalf("answer = %q", out)
 	}
 }

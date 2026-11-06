@@ -53,9 +53,12 @@ func actNames(acts []GateAct) string {
 	return strings.Join(n, ", ")
 }
 
-// writeGateTurn tells the gate hook which turn is running (D4). Best effort:
-// the log loses the turn link, never the action.
-func (l *Loop) writeGateTurn(id, task, text string) {
+// writeGateTurn tells the gate hook which turn is running (D4) and, with a
+// token budget, the work's priority and tokens_per_day, so the hook can stop
+// a P2/P3 turn that crosses the budget (D7). Best effort: the log loses the
+// turn link and the turn is only held to the budget between turns, never the
+// action.
+func (l *Loop) writeGateTurn(ctx context.Context, id, task, text string) {
 	if l.GateTurnFile == "" {
 		return
 	}
@@ -63,8 +66,13 @@ func (l *Loop) writeGateTurn(id, task, text string) {
 	if l.Redactor != nil {
 		topic = l.Redactor.Summary(text)
 	}
-	raw, _ := json.Marshal(map[string]string{"turn": id, "task": task, "topic": topic, "at": time.Now().UTC().Format(time.RFC3339)})
+	t := map[string]any{"turn": id, "task": task, "topic": topic, "at": time.Now().UTC().Format(time.RFC3339Nano)}
+	if prio, perDay := l.turnBudget(ctx); perDay > 0 {
+		t["priority"], t["tokens_per_day"] = prio, perDay
+	}
+	raw, _ := json.Marshal(t)
 	if err := os.WriteFile(l.GateTurnFile, raw, 0o640); err != nil {
 		l.logf("gate turn file: %v", err)
+		_ = os.Remove(l.GateTurnFile) // never leave the last turn's start and priority behind
 	}
 }
