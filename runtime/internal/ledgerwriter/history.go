@@ -30,6 +30,9 @@ type Commit struct {
 	Date    string   `json:"date"`
 	Subject string   `json:"subject"`
 	Paths   []string `json:"paths"`
+	// Hidden counts the files of the commit outside the caller's ledger
+	// areas: a non-planner sees that they exist, not their names.
+	Hidden int `json:"hidden,omitempty"`
 }
 
 // Error kinds the handler maps to HTTP codes (E6).
@@ -88,8 +91,10 @@ func historyPaths(p *profile.Profile, rel string) ([]string, error) {
 }
 
 // History lists the commits that changed a page (or the caller's area).
-// Each commit lists every file it touched, so a move into the area shows
-// where the page came from (and why a revert of it may be refused).
+// Each commit lists the files it touched that the caller may read or write
+// (a planner sees all), so a move into the area shows where the page came
+// from (and why a revert of it may be refused); the other files are only
+// counted (Hidden).
 func (w *Writer) History(ctx context.Context, id, page string, limit int) ([]Commit, error) {
 	p, err := w.profileOf(id)
 	if err != nil {
@@ -117,7 +122,29 @@ func (w *Writer) History(ctx context.Context, id, page string, limit int) ([]Com
 	if err != nil {
 		return nil, err
 	}
-	return parseLog(out), nil
+	commits := parseLog(out)
+	if !p.Planner {
+		for i := range commits {
+			commits[i].Paths, commits[i].Hidden = visiblePaths(p, commits[i].Paths)
+		}
+	}
+	return commits, nil
+}
+
+// visiblePaths keeps the files a non-planner may read or write and counts the
+// rest: the history of its own area must not list the names of pages it
+// cannot read.
+func visiblePaths(p *profile.Profile, paths []string) ([]string, int) {
+	keep, hidden := []string{}, 0
+	for _, f := range paths {
+		rel, ok := strings.CutPrefix(f, "brain/")
+		if ok && (ledger.InArea(p.Ledger.Read, rel) || ledger.InArea(p.Ledger.Write, rel)) {
+			keep = append(keep, f)
+			continue
+		}
+		hidden++
+	}
+	return keep, hidden
 }
 
 // parseLog reads `git log --name-only --no-renames --full-diff` (every file of

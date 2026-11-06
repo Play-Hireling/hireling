@@ -107,6 +107,39 @@ func TestWriteRebasesOnANewerRemote(t *testing.T) {
 	}
 }
 
+// E3 — someone pushes between the writer's fetch and its push: the write is
+// replayed once on the new tip instead of failing. A pre-push hook in the
+// writer's clone plays the other writer, once.
+func TestWriteReplaysARacingPush(t *testing.T) {
+	w, bare := setup(t)
+	ctx := context.Background()
+	if _, err := w.Write(ctx, "dev", "learnings/dev/a.md", []byte(learning("dev", "dev"))); err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(t.TempDir(), "other")
+	run(t, filepath.Dir(other), "clone", "--quiet", bare, other)
+	mark := filepath.Join(t.TempDir(), "raced")
+	hook := "#!/bin/sh\n" +
+		"[ -f '" + filepath.ToSlash(mark) + "' ] && exit 0\n" +
+		"touch '" + filepath.ToSlash(mark) + "'\n" +
+		"unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX\n" +
+		"cd '" + filepath.ToSlash(other) + "' || exit 1\n" +
+		"git -c user.name=racer -c user.email=racer@x commit --quiet --allow-empty -m 'racing push' && git push --quiet origin HEAD:main\n"
+	if err := os.WriteFile(filepath.Join(w.Dir, ".git", "hooks", "pre-push"), []byte(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write(ctx, "dev", "learnings/dev/b.md", []byte(learning("dev", "dev"))); err != nil {
+		t.Fatalf("write after a racing push: %v", err)
+	}
+	if _, err := os.Stat(mark); err != nil {
+		t.Fatal("the racing push never ran")
+	}
+	subjects := run(t, bare, "log", "--format=%s", "-3")
+	if !strings.Contains(subjects, "racing push") || strings.Count(subjects, "learning(dev)") != 2 {
+		t.Fatalf("history = %q", subjects)
+	}
+}
+
 // E3 — the repo moves between organisations: an existing clone follows RepoURL
 // instead of keeping a stale origin and failing to fetch.
 func TestEnsureFollowsAMovedRepo(t *testing.T) {

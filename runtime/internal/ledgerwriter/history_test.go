@@ -259,3 +259,51 @@ func TestRevertRenameCannotEscapeArea(t *testing.T) {
 		t.Fatalf("planner revert: %v", err)
 	}
 }
+
+// A non-planner's history names only the files it may read or write; the
+// others of the same commit are counted, not named. A planner sees them all.
+func TestHistoryHidesOtherAreas(t *testing.T) {
+	w, bare := setup(t)
+	ctx := context.Background()
+	seed := filepath.Join(t.TempDir(), "s")
+	run(t, filepath.Dir(seed), "clone", "--quiet", bare, seed)
+	for _, d := range []string{"learnings/dev", "private"} {
+		if err := os.MkdirAll(filepath.Join(seed, "brain", filepath.FromSlash(d)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(seed, "brain", "learnings", "dev", "y.md"), []byte(learning("dev", "dev")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(seed, "brain", "private", "salary-negotiation.md"), []byte("# notes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, seed, "add", "-A")
+	run(t, seed, "commit", "--quiet", "-m", "two areas")
+	run(t, seed, "push", "--quiet", "origin", "HEAD:main")
+
+	find := func(hist []Commit) Commit {
+		t.Helper()
+		for _, c := range hist {
+			if c.Subject == "two areas" {
+				return c
+			}
+		}
+		t.Fatalf("commit not listed: %+v", hist)
+		return Commit{}
+	}
+	hist, err := w.History(ctx, "dev", "", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := find(hist); len(c.Paths) != 1 || c.Paths[0] != "brain/learnings/dev/y.md" || c.Hidden != 1 {
+		t.Fatalf("dev sees %v (hidden %d)", c.Paths, c.Hidden)
+	}
+	hist, err = w.History(ctx, "innkeeper", "", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := find(hist); len(c.Paths) != 2 || c.Hidden != 0 {
+		t.Fatalf("the planner sees %v (hidden %d)", c.Paths, c.Hidden)
+	}
+}
