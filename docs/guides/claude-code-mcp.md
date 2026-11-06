@@ -45,7 +45,7 @@ $ FRONTDESK_OWNER_TOKEN=… tavern-mcp -check
 ok: http://127.0.0.1:8080 answers with the owner token; party [dev innkeeper scriptwriter]; 0 open decision(s)
 ```
 
-The default scope (`local`) keeps the token in your own `~/.claude.json`, for this project only. **Never** run `claude mcp add --scope project` with a literal token: that writes `.mcp.json`, which is meant to be committed. For a shared `.mcp.json`, let Claude Code expand it from your environment instead:
+The default scope (`local`) keeps the token in your own `~/.claude.json`, for this project only — **in plain text**. To keep it out of that file, export `FRONTDESK_OWNER_TOKEN` in your shell before you start `claude` and register the server without `-e FRONTDESK_OWNER_TOKEN=…` (the server inherits the variable). **Never** run `claude mcp add --scope project` with a literal token: that writes `.mcp.json`, which is meant to be committed. For a shared `.mcp.json`, let Claude Code expand it from your environment instead:
 
 ```json
 {
@@ -113,7 +113,7 @@ The tavern's own limits still apply: whatever an order says, a hireling cannot r
 
 - It is read from the environment and only ever sent as `Authorization: Bearer` to `FRONTDESK_URL`.
 - It is never logged, and every tool result, resource and error is scrubbed of it before it reaches the client.
-- Plain `http://` is accepted only for this machine (`localhost`, `127.0.0.1`, `::1`); anything else needs `https://` (or `FRONTDESK_ALLOW_HTTP=1` on a private network you trust). Credentials in the URL are refused, and redirects are not followed.
+- Plain `http://` is accepted only for this machine by IP (`127.0.0.1`, `::1`; not the name `localhost`, which the hosts file can point anywhere); anything else needs `https://` (or `FRONTDESK_ALLOW_HTTP=1` on a private network you trust). Credentials in the URL are refused, and redirects are not followed.
 
 ## Configuration
 

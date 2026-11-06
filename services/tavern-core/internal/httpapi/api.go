@@ -36,6 +36,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -117,7 +118,31 @@ func (s *Server) Handler() http.Handler {
 	if s.Extra != nil {
 		s.Extra(mux)
 	}
-	return mux
+	return jsonOnly(mux)
+}
+
+// jsonOnly refuses a write to the internal routes (everything outside /api/*)
+// whose body is not declared JSON: 415. A web page the owner opens can reach
+// 127.0.0.1 and send a "simple" cross-site POST (text/plain, no preflight);
+// it cannot send application/json without a CORS preflight, which this
+// server never answers. The runtimes, the gate hook and bin/tavern always
+// send application/json. The Front Desk (/api/*) needs a bearer token, which
+// a cross-site request cannot carry either.
+func jsonOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+		default:
+			if !strings.HasPrefix(r.URL.Path, "/api/") {
+				mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+				if err != nil || mt != "application/json" {
+					writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{"error": "Content-Type must be application/json"})
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

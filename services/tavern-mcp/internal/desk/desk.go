@@ -84,7 +84,7 @@ func (c *Config) Validate() error {
 	case "https":
 	case "http":
 		if !loopback(u.Hostname()) && !c.AllowHTTP {
-			return fmt.Errorf("FRONTDESK_URL: plain http is only allowed to this machine (got host %q); use https://, or set FRONTDESK_ALLOW_HTTP=1 on a private network you trust", u.Hostname())
+			return fmt.Errorf("FRONTDESK_URL: plain http is only allowed to this machine by IP (127.0.0.1 or ::1; got host %q); use https://, or set FRONTDESK_ALLOW_HTTP=1 on a private network you trust", u.Hostname())
 		}
 	default:
 		return errors.New("FRONTDESK_URL must start with http:// or https://")
@@ -96,10 +96,9 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// loopback accepts loopback IP literals only: a name such as localhost is
+// whatever the hosts file says it is.
 func loopback(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
 }

@@ -40,6 +40,9 @@ func newServer() *httptest.Server {
 func call(t *testing.T, srv *httptest.Server, method, path, agent, body string, out any) int {
 	t.Helper()
 	req, _ := http.NewRequest(method, srv.URL+path, strings.NewReader(body))
+	if method != http.MethodGet {
+		req.Header.Set("Content-Type", "application/json") // as the runtimes send it
+	}
 	if agent != "" {
 		req.Header.Set("X-Hireling", agent)
 	}

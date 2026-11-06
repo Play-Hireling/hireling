@@ -14,7 +14,7 @@ Any server that implements this contract can stand in for it.
 | Hireling (own) | `FRONTDESK_TOKEN_<ID>` | Only its own `agent`/`from` |
 | Hireling (shared) | `FRONTDESK_AGENT_TOKEN` | Any hireling of the tavern |
 
-Unknown agents are `401`. Tokens are compared in constant time. Behind a proxy that adds its own auth (e.g. Cloudflare Access), the runtime also sends `CF-Access-Client-Id` / `CF-Access-Client-Secret` when configured.
+Unknown agents are `401`. Tokens are compared in constant time. tavern-core refuses to start when `FRONTDESK_OWNER_TOKEN` is shorter than 32 characters or equal to `FRONTDESK_AGENT_TOKEN` or a hireling's `FRONTDESK_TOKEN_<ID>` (that hireling would be the owner); `./scripts/init-env.sh` writes 48 random hex characters for each. Behind a proxy that adds its own auth (e.g. Cloudflare Access), the runtime also sends `CF-Access-Client-Id` / `CF-Access-Client-Secret` when configured.
 
 ## Owner endpoints
 

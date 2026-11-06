@@ -32,6 +32,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -249,7 +250,54 @@ func (d *Desk) anyHireling(r *http.Request) bool {
 	return false
 }
 
-func (d *Desk) owner(r *http.Request) bool { return same(bearer(r), d.OwnerToken) }
+func (d *Desk) owner(r *http.Request) bool {
+	return same(bearer(r), d.OwnerToken) && !d.ownerShared()
+}
+
+// MinOwnerToken is the shortest owner token tavern-core accepts
+// (scripts/init-env.sh writes 48 hex characters).
+const MinOwnerToken = 32
+
+// ownerShared reports whether the owner token is also a hireling's token
+// (the shared one or any hireling's own): then every such hireling would be
+// the owner, so the owner's endpoints stay closed.
+func (d *Desk) ownerShared() bool {
+	if same(d.OwnerToken, d.SharedToken) {
+		return true
+	}
+	for _, t := range d.AgentTokens {
+		if same(d.OwnerToken, t) {
+			return true
+		}
+	}
+	return false
+}
+
+// Check validates the tokens at start. An owner token that is also a
+// hireling's token would let that hireling order the party and answer its
+// own decisions; a short one can be guessed. The errors never carry a token.
+func (d *Desk) Check() error {
+	if d.OwnerToken == "" {
+		return nil
+	}
+	if n := len(d.OwnerToken); n < MinOwnerToken {
+		return fmt.Errorf("FRONTDESK_OWNER_TOKEN has %d characters, at least %d are required (./scripts/init-env.sh writes a random one)", n, MinOwnerToken)
+	}
+	if same(d.OwnerToken, d.SharedToken) {
+		return errors.New("FRONTDESK_OWNER_TOKEN is the same as FRONTDESK_AGENT_TOKEN: every hireling would be the owner; give the owner its own token")
+	}
+	ids := make([]string, 0, len(d.AgentTokens))
+	for id := range d.AgentTokens {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		if same(d.OwnerToken, d.AgentTokens[id]) {
+			return fmt.Errorf("FRONTDESK_OWNER_TOKEN is the same as hireling %s's own token: that hireling would be the owner; give the owner its own token", id)
+		}
+	}
+	return nil
+}
 
 // IsOwner reports whether r carries the owner token (constant-time compare;
 // false when OwnerToken is empty). tavern-core uses it to guard the owner's

@@ -143,3 +143,138 @@ func TestOwnerRoutesClosedWithoutOwnerFunc(t *testing.T) {
 		t.Fatalf("empty owner token: %d", res.StatusCode)
 	}
 }
+
+// ---- security review of PR #21 (QA Segurança) ---------------------------------
+
+const ownerTok = "0123456789abcdef0123456789abcdef0123456789abcdef" // 48, as init-env.sh writes
+
+// qaServer wires a desk with the given shared and owner tokens; hireling
+// "test" has its own token "test-tok-0123456789abcdef0123456789ab".
+func qaServer(t *testing.T, shared, owner string) (*httptest.Server, *frontdesk.Desk) {
+	t.Helper()
+	p := &profile.Profile{ID: "test", Model: "deepseek-v4-flash"}
+	approver := func(a string) bool { return a == "owner" }
+	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory(), Approver: approver},
+		Usage: usage.NewMemory(), Goal: &goal.Service{Store: goal.NewMemory(), Approver: approver}}
+	desk := &frontdesk.Desk{Agents: []string{"test"}, AgentTokens: map[string]string{"test": "test-tok-0123456789abcdef0123456789ab"},
+		SharedToken: shared, OwnerToken: owner}
+	if err := desk.Load(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	s.Extra, s.Owner = desk.Register, desk.IsOwner
+	srv := httptest.NewServer(s.Handler())
+	t.Cleanup(srv.Close)
+	return srv, desk
+}
+
+func qaCall(t *testing.T, srv *httptest.Server, method, path, token, ctype, body string) int {
+	t.Helper()
+	r, _ := http.NewRequest(method, srv.URL+path, strings.NewReader(body))
+	if ctype != "" {
+		r.Header.Set("Content-Type", ctype)
+	}
+	if token != "" {
+		r.Header.Set("Authorization", "Bearer "+token)
+	}
+	r.Header.Set("X-Hireling", "owner") // the internal header must not open the owner's routes
+	res, err := http.DefaultClient.Do(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	return res.StatusCode
+}
+
+// An owner token that is also a hireling's token is refused at start, and the
+// owner's endpoints stay closed even if a desk is built without the check.
+func TestOwnerTokenCollision(t *testing.T) {
+	const js = "application/json"
+	for name, c := range map[string]struct{ shared, owner, hireling string }{
+		"shared token":   {"shared-tok-0123456789abcdef0123456789ab", "shared-tok-0123456789abcdef0123456789ab", "shared-tok-0123456789abcdef0123456789ab"},
+		"hireling token": {"shared-tok-0123456789abcdef0123456789ab", "test-tok-0123456789abcdef0123456789ab", "test-tok-0123456789abcdef0123456789ab"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv, desk := qaServer(t, c.shared, c.owner)
+			err := desk.Check()
+			if err == nil || strings.Contains(err.Error(), c.owner) {
+				t.Fatalf("Check: %v (must refuse, without the token)", err)
+			}
+			for _, x := range []struct{ method, path, body string }{
+				{"GET", "/api/tasks", ""}, {"GET", "/api/status", ""}, {"GET", "/api/decisions", ""},
+				{"POST", "/api/command", `{"agent":"test","text":"x"}`},
+				{"POST", "/api/decisions/d-1/choose", `{"option":"yes"}`},
+			} {
+				if got := qaCall(t, srv, x.method, x.path, c.hireling, js, x.body); got != http.StatusUnauthorized {
+					t.Errorf("%s %s with the colliding token: %d, want 401", x.method, x.path, got)
+				}
+			}
+		})
+	}
+}
+
+func TestOwnerTokenCheck(t *testing.T) {
+	d := &frontdesk.Desk{SharedToken: "shared-tok-0123456789abcdef0123456789ab", AgentTokens: map[string]string{"test": "test-tok-0123456789abcdef0123456789ab"}}
+	if err := d.Check(); err != nil {
+		t.Fatalf("no owner token is allowed (owner endpoints closed): %v", err)
+	}
+	for _, short := range []string{"abc", strings.Repeat("x", frontdesk.MinOwnerToken-1)} {
+		d.OwnerToken = short
+		if err := d.Check(); err == nil || strings.Contains(err.Error(), short) {
+			t.Fatalf("%d characters: %v", len(short), err)
+		}
+	}
+	d.OwnerToken = ownerTok
+	if err := d.Check(); err != nil {
+		t.Fatalf("a 48-character token of its own: %v", err)
+	}
+}
+
+// No variant of the path opens the owner's routes without the token.
+func TestOwnerNoPathBypass(t *testing.T) {
+	srv, _ := qaServer(t, "shared-tok-0123456789abcdef0123456789ab", ownerTok)
+	for _, path := range []string{
+		"/api/tasks", "/api/tasks/", "/api//tasks", "/api/%74asks", "/API/tasks", "/api/tasks?x=1",
+		"/api/tasks?token=" + ownerTok, "/api/tasks/T-1", "/api/tasks/..%2F..%2Ftasks", "/api/quest", "/api/decisions/d-1",
+	} {
+		if got := qaCall(t, srv, "GET", path, "", "", ""); got == http.StatusOK {
+			t.Errorf("%s without a token: 200", path)
+		}
+	}
+	if got := qaCall(t, srv, "GET", "/api/tasks", ownerTok, "", ""); got != http.StatusOK {
+		t.Errorf("owner: %d", got)
+	}
+	if got := qaCall(t, srv, "GET", "/api/quest", ownerTok, "", ""); got == http.StatusUnauthorized {
+		t.Errorf("owner, no quest yet: %d (404 expected, never 401)", got)
+	}
+}
+
+// A page the owner opens can send a "simple" cross-site POST to 127.0.0.1
+// (text/plain, no preflight). The internal write routes refuse anything that
+// is not declared JSON; JSON itself needs a preflight this server never answers.
+func TestInternalWritesNeedJSON(t *testing.T) {
+	srv, _ := qaServer(t, "shared-tok-0123456789abcdef0123456789ab", ownerTok)
+	task := `{"title":"csrf","owner":"test","priority":"P2","requested_by":"owner","goal_contribution":{"kind":"posts","expected":1}}`
+	for _, x := range []struct{ method, path, body string }{
+		{"POST", "/tasks", task},
+		{"PUT", "/goal", `{"title":"csrf","target":1}`},
+		{"POST", "/actions/answer", `{"agent":"test","decision":"d-1","choice":"yes"}`},
+		{"POST", "/tasks/T-1/approve", `{"agent":"owner"}`},
+		{"POST", "/tasks/T-1/lease", ``},
+	} {
+		for _, ct := range []string{"", "text/plain", "text/plain;charset=UTF-8", "application/x-www-form-urlencoded", "multipart/form-data; boundary=x", "application/jsonx"} {
+			if got := qaCall(t, srv, x.method, x.path, "", ct, x.body); got != http.StatusUnsupportedMediaType {
+				t.Errorf("%s %s as %q: %d, want 415", x.method, x.path, ct, got)
+			}
+		}
+	}
+	if got := qaCall(t, srv, "POST", "/tasks", "", "application/json; charset=utf-8", task); got != http.StatusCreated {
+		t.Errorf("JSON from a runtime: %d, want 201", got)
+	}
+	// Reads and the Front Desk are unchanged.
+	if got := qaCall(t, srv, "GET", "/tasks", "", "", ""); got != http.StatusOK {
+		t.Errorf("GET /tasks: %d", got)
+	}
+	if got := qaCall(t, srv, "POST", "/api/command", ownerTok, "application/json", `{"agent":"test","text":"hi"}`); got != http.StatusOK {
+		t.Errorf("owner order: %d", got)
+	}
+}

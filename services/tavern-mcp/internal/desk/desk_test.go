@@ -21,7 +21,8 @@ func TestFromEnv(t *testing.T) {
 		wantErr string
 	}{
 		{"defaults", map[string]string{"FRONTDESK_OWNER_TOKEN": tok}, DefaultURL, ""},
-		{"fallbacks", map[string]string{"TAVERN_URL": "http://localhost:9000/", "FRONTDESK_TOKEN": tok}, "http://localhost:9000", ""},
+		{"fallbacks", map[string]string{"TAVERN_URL": "http://127.0.0.1:9000/", "FRONTDESK_TOKEN": tok}, "http://127.0.0.1:9000", ""},
+		{"localhost is a name, not loopback", map[string]string{"FRONTDESK_URL": "http://localhost:8080", "FRONTDESK_OWNER_TOKEN": tok}, "", "plain http"},
 		{"frontdesk wins", map[string]string{"FRONTDESK_URL": "https://t.example.com", "TAVERN_URL": "http://127.0.0.1:1", "FRONTDESK_TOKEN": tok}, "https://t.example.com", ""},
 		{"ipv6 loopback", map[string]string{"FRONTDESK_URL": "http://[::1]:8080", "FRONTDESK_TOKEN": tok}, "http://[::1]:8080", ""},
 		{"no token", map[string]string{}, "", "FRONTDESK_OWNER_TOKEN is not set"},

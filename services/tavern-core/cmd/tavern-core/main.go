@@ -127,6 +127,9 @@ func main() {
 	if desk.OwnerToken == "" {
 		logger.Printf("FRONTDESK_OWNER_TOKEN unset: owner endpoints are closed")
 	}
+	if err := desk.Check(); err != nil {
+		logger.Fatalf("front desk: %v", err) // never prints a token
+	}
 	srv := &httpapi.Server{Gate: gate, Tasks: queue, Usage: spent, Goal: quests, Grants: grants, Log: autoLog, Asks: askBook, Ready: ready, Extra: desk.Register, Owner: desk.IsOwner}
 	hs := &http.Server{
 		Addr:              env("TAVERN_ADDR", ":8080"),
