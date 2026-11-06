@@ -862,6 +862,16 @@ func TestAnswerNeedsTheOwnersAnswer(t *testing.T) {
 	if code, ans := ask(notNow, "dev"); code != 200 || len(ans.Granted) != 1 {
 		t.Fatalf("Go ahead after a Not now recommendation: %d %+v", code, ans)
 	}
+	// An option that only starts with a yes reads as something else and does
+	// not grant: ["Go away","Stay"] has no plain yes.
+	if code := pendAs(openWith(`["Go away","Stay"]`), "dev", "merge_pr", "Approve"); code != 400 {
+		t.Fatalf("a card on a decision whose only yes-looking option is Go away: %d", code)
+	}
+	okCancel := openWith(`["OK, cancel it","Yes!"]`)
+	pend(okCancel, "dev")
+	if x := get(okCancel); !strings.HasPrefix(x.Context, `Choosing "Yes!" grants dev`) {
+		t.Fatalf("the card names the wrong option: %q", x.Context)
+	}
 	// A decision with no yes among its options takes no card.
 	if code := pendAs(openWith(`["No","Later"]`), "dev", "merge_pr", "Approve"); code != 400 {
 		t.Fatalf("a card on a decision without a yes: %d", code)

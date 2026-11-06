@@ -121,9 +121,11 @@ func TestWithYes(t *testing.T) {
 	for _, c := range []struct{ in, want []string }{
 		{[]string{"Merge now", "Wait"}, []string{"Merge now", "Wait", "Approve"}},
 		{[]string{"Not now", "Go ahead"}, []string{"Not now", "Go ahead"}},
-		{[]string{"Yes, merge", "No"}, []string{"Yes, merge", "No"}},
+		{[]string{"Yes, merge", "No"}, []string{"Yes, merge", "No", "Approve"}}, // only a plain yes grants
 		{[]string{"a", "b", "c", "d", "e", "f"}, []string{"a", "b", "c", "d", "e", "Approve"}},
 		{[]string{"Okra soup", "Gopher"}, []string{"Okra soup", "Gopher", "Approve"}},
+		{[]string{"Go away", "OK, cancel it"}, []string{"Go away", "OK, cancel it", "Approve"}},
+		{[]string{"Yes.", "No"}, []string{"Yes.", "No"}},
 	} {
 		if got := withYes(c.in); strings.Join(got, "|") != strings.Join(c.want, "|") {
 			t.Errorf("withYes(%v) = %v, want %v", c.in, got, c.want)

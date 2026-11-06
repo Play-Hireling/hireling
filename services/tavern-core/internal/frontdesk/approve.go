@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-
-	"github.com/Play-Hireling/hireling/services/tavern-core/internal/policy"
 )
 
 // Errors of the grant proof (D1/D3).
@@ -37,6 +35,12 @@ var (
 // actionName is what a card's action may be called: the gate's own names
 // (lower-cased tool and action names), nothing that could add a line.
 var actionName = regexp.MustCompile(`^[a-z0-9_.:-]{1,64}$`)
+
+// plainYes is an option that is a yes and nothing else ("Approve", "Yes.",
+// "OK!", "Go ahead"): the option that grants. An option that only starts
+// with one ("Go away", "OK, cancel it") is not: it reads as something else.
+// The runtime's withYes uses the same list (runtime/internal/loop).
+var plainYes = regexp.MustCompile(`(?i)^\s*(approve|approved|yes|ok|okay|go|go ahead|do it|allow|confirm)\s*[.!]?\s*$`)
 
 // maxCard bounds the line tavern-core adds to a decision's context. The line
 // is never cut: a card that does not fit is refused.
@@ -79,7 +83,7 @@ func (d *Desk) Bind(ctx context.Context, decisionID, agent, deskID string, actio
 		// "Not now"); never an option the hireling names on its card.
 		yes := ""
 		for _, o := range x.Options {
-			if policy.Approves(o, "") {
+			if plainYes.MatchString(o) {
 				yes = o
 				break
 			}

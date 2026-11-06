@@ -23,9 +23,10 @@ type GateGrants interface {
 	Answer(ctx context.Context, decision, choice string) ([]GateAct, error)
 }
 
-// yesWord is a plain yes as tavern-core reads it (policy.Approves): the card
-// is granted on the first option that starts with one.
-var yesWord = regexp.MustCompile(`(?i)^\s*(approve|approved|yes|ok|okay|go|go ahead|do it|allow|confirm)\b`)
+// yesWord is an option that is a plain yes and nothing else, as the Front
+// Desk reads it (frontdesk.plainYes in tavern-core: keep the two lists the
+// same): the card is granted on the first such option.
+var yesWord = regexp.MustCompile(`(?i)^\s*(approve|approved|yes|ok|okay|go|go ahead|do it|allow|confirm)\s*[.!]?\s*$`)
 
 // withYes makes sure a card that carries blocked actions offers a plain yes:
 // without one tavern-core refuses the card and the owner's answer could grant
