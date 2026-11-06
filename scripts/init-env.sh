@@ -12,7 +12,7 @@ rand() { od -An -N24 -tx1 /dev/urandom | tr -d ' \n'; }
 fill() {
   key=$1
   min=${2:-1}
-  current=$(sed -n "s|^$key=||p" .env | tail -n 1)
+  current=$(sed -n "s|^$key=||p" .env | tail -n 1 | tr -d '\r')
   if [ "${#current}" -ge "$min" ]; then
     echo "kept   $key"
   else
