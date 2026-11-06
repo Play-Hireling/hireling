@@ -114,7 +114,21 @@ hireling quest          # print the quest bar (C1)
    `composio.Instructions`: an account that is not connected is asked for with an `ask` block
    carrying the Connect Link (the owner authorizes on Composio's page, 10-minute link) — never a
    password or token. `hireling check` prints the `hands` line. No key or no toolkits = no hands.
-16. Everything that leaves the container goes through `internal/redact` (**A9**): the values
+16. **Daily plan (B10)**: a planner with `daily_plan.at` in its profile (the Innkeeper: 08:00 in its
+   `daily_plan.tz`, default UTC) checks once a minute; from that local time on it calls `POST /plans/daily`
+   with the local date. tavern-core composes the plan from the queue (each hireling's open tasks in
+   B3 order, what waits on the owner, the handoffs to approve) and the quest, and keeps one record per day
+   (the quest board: `GET /goal` → `daily_plan`). Only the call that created the day's record runs the
+   Innkeeper's morning turn: one model turn with the plan as input (skipped over `tokens_per_day`, D7;
+   a P3 routine for the gate hook's in-turn cut, so it wraps up once the day's tokens run out),
+   whose `plan`/`request`/`decision`/`ask`/`ledger` blocks are applied as in any planner turn and whose
+   remaining text is the note, stored with `POST /plans/daily/{day}/commentary`. Start, turn and end
+   are one piece under the turn lock: one Front Desk turn `Daily plan · <day> · <summary>` whose
+   result is the note (or why there is none), and `plan.daily` on `events`; then
+   `POST /plans/daily/{day}/logged`. Every step that fails (log line, note, mark) is retried on the
+   next minute, after a restart too (tavern-core's `logged_at` says what is still owed); the turn
+   itself never runs twice. tavern-core down = try again next minute.
+17. Everything that leaves the container goes through `internal/redact` (**A9**): the values
    of every variable listed in `profile.secrets`, the front desk token and the Access
    secret are masked, plus credential-shaped strings; summaries are cut to 120 characters
    like the front desk does.

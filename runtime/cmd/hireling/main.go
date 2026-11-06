@@ -95,6 +95,9 @@ func main() {
 		} else {
 			fmt.Printf("party    %v (handoffs approved by %s)\n", l.Party, l.Approver)
 		}
+		if l.Daily != nil {
+			fmt.Printf("daily    plan every day at %s (%s) on the quest board and in the log (B10)\n", l.Profile.DailyPlan.At, l.Profile.DailyPlan.Zone())
+		}
 		if l.Leases != nil {
 			fmt.Printf("escalate after %d failed turns in a row on a task (B11)\n", l.Profile.Runtime.EscalateAfter)
 		}
@@ -392,11 +395,15 @@ func build(logger *log.Logger) (*loop.Loop, error) {
 	var quest loop.QuestReader
 	var ranker loop.Ranker
 	var leases loop.Leaser
+	var daily loop.DailyPoster
 	if tc := tavernClient(p.ID); tc != nil {
 		leases = tc.(*tavern.Client)
 		tasks = tc.(*tavern.Client)
 		quest = tc.(*tavern.Client)
 		ranker = tc.(*tavern.Client)
+		if p.Planner && p.DailyPlan.At != "" {
+			daily = tc.(*tavern.Client) // B10
+		}
 	}
 	turnTimeout := time.Duration(p.Runtime.TurnTTLMinutes-1) * time.Minute
 	// A13: turns go through the warm Hermes API server the image runs in this
@@ -442,6 +449,7 @@ func build(logger *log.Logger) (*loop.Loop, error) {
 		Quest:           quest,
 		Ranker:          ranker,
 		Leases:          leases,
+		Daily:           daily,
 		Party:           party,
 		Approver:        approver,
 

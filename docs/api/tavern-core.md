@@ -58,6 +58,10 @@ With `"use": true` the check counts a capped use in its UTC day or ISO week wind
 | `POST /tasks/{id}/approve` · `/deny` | `{"agent","note"}` | Planner/owner decides a requested task |
 | `POST /tasks/{id}/fail` | `{"agent","error","max"}` | Count a failed turn; at `max` → `blocked`, `needs_human` |
 | `POST /tasks/{id}/unblock` | `{"agent","action"}` | Owner's answer to an escalation: retry, reassign, drop, change brief |
+| `POST /plans/daily` | `{"day","tz"}` (planner) | The day's plan, composed from the queue and the quest and kept once per local day; `created: true` only for the call that made it (B10) |
+| `GET /plans/daily?day=` | — | One day's plan (default: the latest) |
+| `POST /plans/daily/{day}/commentary` | `{"text"}` (planner) | The morning turn's note, stored once (≤ 2000 characters) and added to the quest board |
+| `POST /plans/daily/{day}/logged` | — (planner) | Marks the day's log line as written (idempotent) |
 
 Status codes: `404` unknown task or quest not set · `409` not the owner / not leased / already finished / not pending · `403` not an approver or not the quest source · `400` validation.
 

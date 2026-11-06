@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
+	_ "time/tzdata" // B10: the daily plan's time zone resolves even in an image without zoneinfo
 
 	"gopkg.in/yaml.v3"
 )
@@ -97,6 +99,49 @@ type Runtime struct {
 	ChatReasoning string `yaml:"chat_reasoning"`
 }
 
+// DailyPlan is B10: every day at At (local time in TZ) the runtime of a
+// planner posts the day's plan — composed by tavern-core from the queue and
+// the quest — on the quest board and in the log. Empty At = off.
+type DailyPlan struct {
+	At string `yaml:"at"` // "08:00", 24-hour local time
+	TZ string `yaml:"tz"` // IANA zone; default DefaultTZ
+}
+
+// DefaultTZ is the tavern's clock when a profile names no zone.
+const DefaultTZ = "UTC"
+
+// Zone is the plan's IANA time zone name (TZ or DefaultTZ).
+func (d DailyPlan) Zone() string {
+	if d.TZ == "" {
+		return DefaultTZ
+	}
+	return d.TZ
+}
+
+// Location is the plan's time zone.
+func (d DailyPlan) Location() (*time.Location, error) {
+	return time.LoadLocation(d.Zone())
+}
+
+// Due reports whether the day's plan is due at now: the local date in the
+// plan's zone and whether the local time reached At. Off (no At) is never due.
+func (d DailyPlan) Due(now time.Time) (day string, due bool, err error) {
+	if d.At == "" {
+		return "", false, nil
+	}
+	loc, err := d.Location()
+	if err != nil {
+		return "", false, err
+	}
+	at, err := time.Parse("15:04", d.At)
+	if err != nil {
+		return "", false, fmt.Errorf("daily_plan.at %q: want HH:MM", d.At)
+	}
+	local := now.In(loc)
+	start := time.Date(local.Year(), local.Month(), local.Day(), at.Hour(), at.Minute(), 0, 0, loc)
+	return local.Format("2006-01-02"), !local.Before(start), nil
+}
+
 type Profile struct {
 	ID             string `yaml:"id"`
 	DisplayNameKey string `yaml:"display_name_key"`
@@ -121,6 +166,8 @@ type Profile struct {
 	// (B2: the Innkeeper). Its prompt gets the plan format appended and the
 	// runtime acts on the plan block of its answers.
 	Planner bool `yaml:"planner"`
+	// DailyPlan (B10, planners only) is when the day's plan is posted.
+	DailyPlan DailyPlan `yaml:"daily_plan"`
 
 	// Prompt is agents/<id>/prompt.md, loaded next to the profile.
 	Prompt string `yaml:"-"`
@@ -212,6 +259,17 @@ func (p *Profile) Validate() error {
 		}
 		if why := SensitiveHost(h); why != "" {
 			return fmt.Errorf("profile %s: network.allow %q is a %s system — no role reaches finance, KYC or legal systems (D6)", p.ID, h, why)
+		}
+	}
+	if p.DailyPlan.At != "" || p.DailyPlan.TZ != "" {
+		if !p.Planner {
+			return fmt.Errorf("profile %s: daily_plan is for the planner (B10) — set planner: true or drop it", p.ID)
+		}
+		if _, err := time.Parse("15:04", p.DailyPlan.At); err != nil {
+			return fmt.Errorf("profile %s: daily_plan.at %q: want HH:MM (24-hour local time)", p.ID, p.DailyPlan.At)
+		}
+		if _, err := p.DailyPlan.Location(); err != nil {
+			return fmt.Errorf("profile %s: daily_plan.tz %q: %v", p.ID, p.DailyPlan.TZ, err)
 		}
 	}
 	seen := map[string]bool{}

@@ -6,6 +6,9 @@ home_server: local
 region: ""
 sprite: innkeeper
 planner: true                       # B2: this hireling plans; the runtime creates the tasks it writes in its plan block
+daily_plan:                         # B10: every morning the runtime posts the day's plan (quest board + log), once per local day
+  at: "08:00"                       # 24-hour local time
+  tz: UTC                           # your IANA zone, e.g. Europe/Lisbon
 
 budget:
   tokens_per_day: 100000

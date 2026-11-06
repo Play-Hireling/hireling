@@ -26,6 +26,7 @@ import (
 
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/asks"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/autonomy"
+	"github.com/Play-Hireling/hireling/services/tavern-core/internal/daily"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/frontdesk"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/goal"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/httpapi"
@@ -75,6 +76,7 @@ func main() {
 	var autoLog autonomy.Store = autonomy.NewMemory()
 	var askBook asks.Store = asks.NewMemory()
 	var persist frontdesk.Persister
+	var plans daily.Store = daily.NewMemory()
 	ready := func() error { return nil }
 	if url := os.Getenv("REDIS_URL"); url != "" {
 		opt, err := redis.ParseURL(url)
@@ -94,6 +96,7 @@ func main() {
 		autoLog = &autonomy.Redis{C: c}
 		askBook = &asks.Redis{C: c}
 		persist = &frontdesk.Redis{C: c}
+		plans = &daily.Redis{C: c}
 		ready = func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
@@ -130,7 +133,9 @@ func main() {
 	if err := desk.Check(); err != nil {
 		logger.Fatalf("front desk: %v", err) // never prints a token
 	}
-	srv := &httpapi.Server{Gate: gate, Tasks: queue, Usage: spent, Goal: quests, Grants: grants, Log: autoLog, Asks: askBook, Approvals: desk, Ready: ready, Extra: desk.Register, Owner: desk.IsOwner}
+	// B10: the planner posts the day's plan, composed here from the queue and the quest.
+	days := &daily.Service{Store: plans, Tasks: queue, Goal: quests, Approver: approver}
+	srv := &httpapi.Server{Gate: gate, Tasks: queue, Usage: spent, Goal: quests, Daily: days, Grants: grants, Log: autoLog, Asks: askBook, Approvals: desk, Ready: ready, Extra: desk.Register, Owner: desk.IsOwner}
 	hs := &http.Server{
 		Addr:              env("TAVERN_ADDR", ":8080"),
 		Handler:           srv.Handler(),

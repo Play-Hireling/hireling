@@ -186,19 +186,3 @@ func TestConcurrentCommandsAndBarKeepTheirPriority(t *testing.T) {
 		}
 	}
 }
-
-// overTokens is tavern-core's answer to the D7 in-turn check once the day's
-// tokens are spent: `budget` for the `tokens` action, free otherwise.
-type overTokens struct{ asked []gate.Context }
-
-func (o *overTokens) Check(_ context.Context, action, _ string, c gate.Context) (gate.Decision, error) {
-	if action == gate.Tokens {
-		o.asked = append(o.asked, c)
-		return gate.Decision{Level: "budget", Reason: "daily token budget reached (D7): 100300/100000 tokens today"}, nil
-	}
-	return gate.Decision{Level: "free"}, nil
-}
-
-type spent int64
-
-func (s spent) Tokens(context.Context, time.Time) (int64, error) { return int64(s), nil }

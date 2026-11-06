@@ -19,6 +19,10 @@
 //	GET  /tasks · POST /tasks
 //	POST /tasks/{id}/lease · /renew · /handoff · /finish
 //	POST /tasks/{id}/approve · /deny    B6: the Innkeeper decides a requested handoff
+//	POST /plans/daily {day, tz}       B10: the planner posts the day's plan (composed here from the queue and the quest; once per day)
+//	GET  /plans/daily?day=            the day's plan (no day = the latest); GET /goal carries the latest as daily_plan
+//	POST /plans/daily/{day}/commentary {text}  the Innkeeper's note from its morning turn (once)
+//	POST /plans/daily/{day}/logged    the plan reached the log (the runtime retries until it does)
 //
 // With the owner token (Authorization: Bearer, the Front Desk's owner token):
 //
@@ -45,6 +49,7 @@ import (
 
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/asks"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/autonomy"
+	"github.com/Play-Hireling/hireling/services/tavern-core/internal/daily"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/frontdesk"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/goal"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/policy"
@@ -57,6 +62,8 @@ type Server struct {
 	Tasks *tasks.Service
 	Usage usage.Store
 	Goal  *goal.Service // C1: the shared quest (nil = feature off)
+	// Daily keeps the Innkeeper's daily plan (B10; nil = off).
+	Daily *daily.Service
 	// Grants holds the owner's approvals for blocked actions (D1/D3; nil = off).
 	Grants policy.Grants
 	// Log is the Autonomy Log (D4; nil = off): every "use" check is written.
@@ -139,6 +146,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /tasks/{id}/unblock", s.unblock)
 	mux.HandleFunc("POST /tasks/{id}/approve", s.approve)
 	mux.HandleFunc("POST /tasks/{id}/deny", s.deny)
+	mux.HandleFunc("POST /plans/daily", s.postDaily)
+	mux.HandleFunc("GET /plans/daily", s.getDaily)
+	mux.HandleFunc("POST /plans/daily/{day}/commentary", s.commentDaily)
+	mux.HandleFunc("POST /plans/daily/{day}/logged", s.loggedDaily)
 	// The owner's read-only board and quest under /api/*, with the owner token
 	// (the routes above trust the internal network and stay as they are).
 	mux.HandleFunc("GET /api/tasks", s.ownerOnly(s.ownerTasks))
@@ -187,9 +198,9 @@ func fail(w http.ResponseWriter, err error) {
 		code = http.StatusNotFound
 	case errors.Is(err, tasks.ErrNotOwner), errors.Is(err, tasks.ErrFinished), errors.Is(err, tasks.ErrNotLeased), errors.Is(err, tasks.ErrNotPending):
 		code = http.StatusConflict
-	case errors.Is(err, tasks.ErrNotApprover), errors.Is(err, goal.ErrForbidden), errors.Is(err, goal.ErrNotSource):
+	case errors.Is(err, tasks.ErrNotApprover), errors.Is(err, goal.ErrForbidden), errors.Is(err, goal.ErrNotSource), errors.Is(err, daily.ErrForbidden):
 		code = http.StatusForbidden
-	case errors.Is(err, goal.ErrNotSet):
+	case errors.Is(err, goal.ErrNotSet), errors.Is(err, daily.ErrNotFound):
 		code = http.StatusNotFound
 	}
 	writeJSON(w, code, map[string]string{"error": err.Error()})
@@ -718,6 +729,9 @@ type questView struct {
 	// C3: declared contributions by kind — open tasks and done tasks.
 	ExpectedOpen map[string]int `json:"expected_open"`
 	ExpectedDone map[string]int `json:"expected_done"`
+	// DailyPlan is the Innkeeper's latest daily plan (B10), what the quest
+	// board shows under the bar. Absent until the first one is posted.
+	DailyPlan *daily.Plan `json:"daily_plan,omitempty"`
 }
 
 func (s *Server) quest(ctx context.Context, g *goal.Goal) questView {
@@ -725,7 +739,95 @@ func (s *Server) quest(ctx context.Context, g *goal.Goal) questView {
 	if all, err := s.Tasks.Store.List(ctx); err == nil {
 		v.ExpectedOpen, v.ExpectedDone = tasks.Expected(all)
 	}
+	if s.Daily != nil {
+		if p, err := s.Daily.Get(ctx, ""); err == nil {
+			v.DailyPlan = p
+		}
+	}
 	return v
+}
+
+// ---- Daily plan (B10) -------------------------------------------------------
+
+// postDaily is POST /plans/daily {day, tz}: the planner's runtime posts the
+// day's plan every morning. The first post of a day composes and keeps it
+// (201, created: true); any later post of that day returns it unchanged
+// (200, created: false), which is how a restarted runtime knows not to log it
+// again.
+func (s *Server) postDaily(w http.ResponseWriter, r *http.Request) {
+	if s.Daily == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "daily plan not enabled"})
+		return
+	}
+	var in struct {
+		Day string `json:"day"`
+		TZ  string `json:"tz,omitempty"`
+	}
+	if err := decode(r, &in); err != nil {
+		fail(w, err)
+		return
+	}
+	p, created, err := s.Daily.Post(r.Context(), agent(r, ""), in.Day, in.TZ)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	code := http.StatusOK
+	if created {
+		code = http.StatusCreated
+	}
+	writeJSON(w, code, map[string]any{"created": created, "plan": p})
+}
+
+// commentDaily is POST /plans/daily/{day}/commentary {text}: the note the
+// Innkeeper's morning turn wrote on the plan. Stored once; a retry gets the
+// plan back unchanged.
+func (s *Server) commentDaily(w http.ResponseWriter, r *http.Request) {
+	if s.Daily == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "daily plan not enabled"})
+		return
+	}
+	var in struct {
+		Text string `json:"text"`
+	}
+	if err := decode(r, &in); err != nil {
+		fail(w, err)
+		return
+	}
+	p, err := s.Daily.Comment(r.Context(), agent(r, ""), r.PathValue("day"), in.Text)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+// loggedDaily is POST /plans/daily/{day}/logged: the plan is in the log.
+func (s *Server) loggedDaily(w http.ResponseWriter, r *http.Request) {
+	if s.Daily == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "daily plan not enabled"})
+		return
+	}
+	p, err := s.Daily.Logged(r.Context(), agent(r, ""), r.PathValue("day"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+// getDaily is GET /plans/daily?day= (no day = the latest).
+func (s *Server) getDaily(w http.ResponseWriter, r *http.Request) {
+	if s.Daily == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "daily plan not enabled"})
+		return
+	}
+	p, err := s.Daily.Get(r.Context(), r.URL.Query().Get("day"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
 }
 
 func (s *Server) getGoal(w http.ResponseWriter, r *http.Request) {

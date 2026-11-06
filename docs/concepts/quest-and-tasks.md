@@ -52,4 +52,8 @@ P2 and P3 turns are interruptible. Your order (always P0) interrupts them; so do
 
 A worker that needs another hireling ends its answer with a `request` block. tavern-core creates the task **blocked** (the requester is not an approver) and the runtime sends a `handoff` to the Innkeeper. The Innkeeper approves (→ `queued`, owner notified) or denies (→ `cancelled`, requester told why). Both land on the timeline with who decided.
 
+### The daily plan
+
+Every morning (the planner's `daily_plan.at`) tavern-core puts the day's plan on the quest board: each hireling's open tasks in the order they will be taken, what waits on you, and the handoffs to approve. The Innkeeper then takes one short turn on it and leaves a note of at most five lines on the board: what matters most today, what is at risk, and what is stuck. If it needs new work, it adds tasks; it never edits existing ones. See [`daily_plan`](../reference/profile.md).
+
 Read next: [Autonomy and decisions](autonomy.md).

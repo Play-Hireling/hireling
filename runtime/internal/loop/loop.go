@@ -131,6 +131,15 @@ type Loop struct {
 	// Quest, when set, prefixes every turn with the quest bar (C1) so the model
 	// plans against the goal and declares contributions in its kinds (C3).
 	Quest QuestReader
+	// Daily, when set on a planner with daily_plan.at, posts the day's plan
+	// every morning (B10): tavern-core composes and keeps it once per local
+	// day (the quest board); the post that creates it runs the Innkeeper's
+	// morning turn (its note), and the runtime logs the plan until the log
+	// line lands. DailyEvery is how often it checks (default 1 min).
+	Daily      DailyPoster
+	DailyEvery time.Duration
+	dailyMu    sync.Mutex
+	daily      dailyState // B10 progress of the current local day (guarded by dailyMu)
 	// Ranker, when set, orders each batch of bar messages by the tavern-core
 	// queue (B3): the best-placed task first, messages without a task at P2.
 	Ranker Ranker
@@ -234,6 +243,9 @@ func (l *Loop) Run(ctx context.Context) error {
 				l.logf("bar: %v", err)
 			}
 		}()
+	}
+	if l.Daily != nil && l.Profile.Planner && l.Profile.DailyPlan.At != "" {
+		go l.RunDaily(ctx)
 	}
 	for {
 		waited, err := l.onceWait(ctx)
@@ -410,6 +422,12 @@ type turnResult struct {
 func (l *Loop) turnOn(ctx context.Context, id, task, after, text string) (res turnResult) {
 	l.turnMu.Lock()
 	defer l.turnMu.Unlock()
+	return l.turnLocked(ctx, id, task, after, text)
+}
+
+// turnLocked is turnOn for a caller that already holds the turn lock (B10:
+// the daily plan's start, morning turn and end are one piece).
+func (l *Loop) turnLocked(ctx context.Context, id, task, after, text string) (res turnResult) {
 	var prio string
 	if task != "" {
 		res.held, prio = l.claim(ctx, task)

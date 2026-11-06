@@ -11,6 +11,9 @@ home_server: local                   # where it is meant to run (server flag)
 region: ""                           # ISO country code for the flag, optional
 sprite: scriptwriter                 # sprite set in the game client
 planner: false                       # true for the one hireling that plans (the Innkeeper)
+daily_plan:                          # planners only · the day's plan, once per local day (B10)
+  at: "08:00"                        # 24-hour local time; empty = off
+  tz: UTC                            # IANA zone · default UTC
 
 budget:
   tokens_per_day: 150000             # mana · per UTC day; over it only P0/P1 run
@@ -58,6 +61,9 @@ Lowercase slug (`a-z`, `0-9`, `-`). The id names the container (`agent-<id>`), t
 
 ### `planner`
 Marks the hireling whose answers may carry a `plan` block and who approves handoffs. Exactly one per tavern is the norm.
+
+### `daily_plan`
+Planners only. From `at` (local time in `tz`) the runtime asks tavern-core for the day's plan once per local day: each hireling's open tasks in queue order (at most 5 each), what waits on you, and the handoffs to approve, with the quest bar. Only the call that creates the day's record runs one morning turn of the planner with the plan as input. It is a P3 routine, so it is skipped over `tokens_per_day` and cut like any P3 turn when the tokens run out. Its `plan`, `request`, `decision`, `ask` and `ledger` blocks apply as in any planner turn, and the rest of its answer is the day's note. The plan and the note show on the quest board (`GET /goal` → `daily_plan`) and in the log, as one Front Desk turn `Daily plan · <day> · <summary>`. A step that fails is retried every minute, after a restart too; the morning turn never runs twice.
 
 ### `budget`
 `tokens_per_day` is the hireling's daily mana: every turn's usage is recorded against it and reported by `GET /agents/<id>/budget`. Once it is reached, the runtime runs only P0/P1 work (D7): your commands and answers, bar messages about P0/P1 tasks, and alerts. Any other bar message is held, unacked, and runs after 00:00 UTC. A P2/P3 turn already running when the budget runs out is cut between tool calls: the gate hook refuses the next tool call and the model wraps up. Set it to `0` for no budget.
