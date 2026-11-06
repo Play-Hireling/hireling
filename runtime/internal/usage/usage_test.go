@@ -72,6 +72,22 @@ func TestCollect(t *testing.T) {
 	}
 }
 
+// TestTokens: the running spend of the turn is the sum tavern-core counts, and
+// an older turn stays out.
+func TestTokens(t *testing.T) {
+	s, started := newStore(t)
+	n, err := s.Tokens(context.Background(), started.Add(-time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := int64(14924 + 68096 + 1017 + 313); n != want {
+		t.Fatalf("tokens = %d, want %d", n, want)
+	}
+	if _, err := (&Store{DB: filepath.Join(t.TempDir(), "none.db")}).Tokens(context.Background(), started); err != ErrNoStore {
+		t.Fatalf("missing store: %v", err)
+	}
+}
+
 // TestAnswerKeepsFences: the stored reply is the raw markdown the model wrote,
 // fences included (the terminal render dropped them, 2026-11-04).
 func TestAnswerKeepsFences(t *testing.T) {

@@ -2,7 +2,10 @@ package loop
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -206,4 +209,82 @@ func countKind(ev []redis.XMessage, kind string) int {
 		}
 	}
 	return n
+}
+
+// D7 in-turn: the turn file tells the gate hook the running work's priority
+// and the profile's tokens_per_day, so it can stop a P2/P3 turn that crosses
+// the budget; the owner's command is P0. Without a budget nothing is written.
+func TestTurnFileCarriesTheBudget(t *testing.T) {
+	ctx := context.Background()
+	_, h := newServer(t)
+	l := newLoop(h, &fakeTurner{})
+	// Off-peak (D9), or the P3 message is held and never reaches the turn
+	// file when the test runs during DeepSeek's peak hours.
+	l.now = func() time.Time { return time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC) }
+	l.Profile.Budget.TokensPerDay = 1000
+	l.TurnsDir = t.TempDir()
+	l.GateTurnFile = filepath.Join(t.TempDir(), "gate-turn.json")
+	l.Bus = newBar(t, "test")
+	if err := l.Bus.EnsureGroup(ctx); err != nil {
+		t.Fatal(err)
+	}
+	l.Budget = &fakeBudget{b: tavern.Budget{Day: "2026-11-05", TokensPerDay: 1000, TokensUsed: 100},
+		prio: map[string]string{"T-1": "P1", "T-3": "P3"}}
+	sender := &bar.Bus{C: l.Bus.C, Agent: "innkeeper"}
+	for _, m := range []bar.Message{
+		{To: "test", Type: "request", Task: "T-3", Text: "weekly routine"},
+		{To: "test", Type: "request", Task: "T-1", Text: "launch copy"},
+		{To: "test", Type: "note", Text: "fyi"},
+	} {
+		if _, err := sender.Send(ctx, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	msgs, _ := l.Bus.Next(ctx, 100*time.Millisecond)
+	type turnFile struct {
+		Turn         string `json:"turn"`
+		At           string `json:"at"`
+		Priority     string `json:"priority"`
+		TokensPerDay int    `json:"tokens_per_day"`
+	}
+	read := func() turnFile {
+		var f turnFile
+		raw, err := os.ReadFile(l.GateTurnFile)
+		if err != nil || json.Unmarshal(raw, &f) != nil {
+			t.Fatalf("turn file: %s (%v)", raw, err)
+		}
+		if _, err := time.Parse(time.RFC3339, f.At); err != nil {
+			t.Fatalf("turn start %q: %v", f.At, err)
+		}
+		return f
+	}
+	got := map[string]string{}
+	l.Turner = turnerFunc(func(text string) {
+		f := read()
+		if f.TokensPerDay != 1000 {
+			t.Errorf("tokens_per_day = %d", f.TokensPerDay)
+		}
+		for _, k := range []string{"weekly routine", "launch copy", "fyi"} {
+			if strings.Contains(text, k) {
+				got[k] = f.Priority
+			}
+		}
+	})
+	l.handleBatch(ctx, msgs)
+	if got["weekly routine"] != "P3" || got["launch copy"] != "P1" || got["fyi"] != "P2" {
+		t.Fatalf("priorities in the turn file = %v", got)
+	}
+	l.Turner = turnerFunc(func(string) {
+		if f := read(); f.Priority != "P0" || f.TokensPerDay != 1000 {
+			t.Errorf("the owner's command: %+v", f)
+		}
+	})
+	l.Handle(ctx, frontdesk.Command{ID: "c-1", Text: "the owner's order"})
+
+	l.Profile.Budget.TokensPerDay = 0
+	l.Turner = &fakeTurner{out: "ok"}
+	l.Handle(ctx, frontdesk.Command{ID: "c-2", Text: "no budget"})
+	if f := read(); f.Turn != "c-2" || f.Priority != "" || f.TokensPerDay != 0 {
+		t.Fatalf("no budget, yet the turn file has %+v", f)
+	}
 }

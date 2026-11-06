@@ -151,7 +151,7 @@ docker build -f runtime/Dockerfile -t hireling/runtime:local .
 
 ## Known gaps
 
-- Budget enforcement (stopping at `tokens_per_day`) is **D7** (roadmap); today the usage is only recorded.
+- Budget enforcement (`tokens_per_day`, **D7**) holds P2/P3 bar work between turns and stops a P2/P3 turn between tool calls (the gate hook); the cut is at most one API call late.
 - Decisions live on the Front Desk only; they are not mirrored into tavern-core's task timeline yet.
 
 Full documentation: [../docs/README.md](../docs/README.md).

@@ -24,8 +24,9 @@ const (
 	Free   Level = "free"
 	Capped Level = "capped"
 	Owner  Level = "owner"
-	// Budget is D8: the hireling's daily web-call budget is spent. Not an
-	// approval for the owner — the call waits for the next UTC day.
+	// Budget is D8 (the daily web-call budget is spent) or D7 (the daily
+	// token budget is spent, checked inside a turn). Not an approval for
+	// the owner — the call waits for the next UTC day.
 	Budget Level = "budget"
 )
 
@@ -45,6 +46,9 @@ type Request struct {
 	Why  string `json:"why,omitempty"`
 	Turn string `json:"turn,omitempty"`
 	Task string `json:"task,omitempty"`
+	// TurnTokens is the running turn's spend so far, sent by the hook with
+	// the D7 `tokens` check (the usage record only arrives after the turn).
+	TurnTokens int64 `json:"turn_tokens,omitempty"`
 }
 
 // Decision is the gate's answer.

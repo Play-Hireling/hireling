@@ -437,7 +437,7 @@ func (l *Loop) turnOn(ctx context.Context, id, task, after, text string) (res tu
 	}
 	started := time.Now()
 	res.started = started
-	l.writeGateTurn(id, task, text)
+	l.writeGateTurn(ctx, id, task, text)
 	l.lastLatency = [2]time.Duration{}
 	if rs, ok := l.Turner.(reasoner); ok {
 		rs.SetReasoning(l.chatReasoning(task))
