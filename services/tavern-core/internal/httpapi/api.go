@@ -109,6 +109,7 @@ func (s *Server) now() time.Time {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", s.client) // OS5: the plain-art owner client
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /agents", s.agents)
 	mux.HandleFunc("GET /agents/{id}/budget", s.budget)
