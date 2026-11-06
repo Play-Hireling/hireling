@@ -137,14 +137,24 @@ func (w *Writer) History(ctx context.Context, id, page string, limit int) ([]Com
 func visiblePaths(p *profile.Profile, paths []string) ([]string, int) {
 	keep, hidden := []string{}, 0
 	for _, f := range paths {
-		rel, ok := strings.CutPrefix(f, "brain/")
-		if ok && (ledger.InArea(p.Ledger.Read, rel) || ledger.InArea(p.Ledger.Write, rel)) {
+		if canSee(p, f) {
 			keep = append(keep, f)
 			continue
 		}
 		hidden++
 	}
 	return keep, hidden
+}
+
+// canSee reports whether the caller may see the name of a repo file: a
+// planner sees all; anyone else, the files of brain/ in its ledger.read or
+// ledger.write areas.
+func canSee(p *profile.Profile, f string) bool {
+	if p.Planner {
+		return true
+	}
+	rel, ok := strings.CutPrefix(f, "brain/")
+	return ok && (ledger.InArea(p.Ledger.Read, rel) || ledger.InArea(p.Ledger.Write, rel))
 }
 
 // parseLog reads `git log --name-only --no-renames --full-diff` (every file of
@@ -230,13 +240,22 @@ func (w *Writer) Revert(ctx context.Context, id, commit, reason string) (*Result
 	if len(files) == 0 {
 		return nil, fmt.Errorf("%w: %s changes no file", ErrNotRevertable, commit)
 	}
+	// A refusal names a file only when the caller may see its name (as in
+	// History); the others are only counted.
+	_, hidden := visiblePaths(p, files)
 	for _, f := range files {
 		if !strings.HasPrefix(f, "brain/") {
-			return nil, fmt.Errorf("%w: %s also changes %s, outside the Ledger", ErrNotRevertable, commit, f)
+			if canSee(p, f) {
+				return nil, fmt.Errorf("%w: %s also changes %s, outside the Ledger", ErrNotRevertable, commit, f)
+			}
+			return nil, fmt.Errorf("%w: %s also changes %d file(s) outside your ledger areas", ErrNotRevertable, commit, hidden)
 		}
 		rel := strings.TrimPrefix(f, "brain/")
 		if !p.Planner && !ledger.InArea(p.Ledger.Write, rel) {
-			return nil, fmt.Errorf("%w: %s may write %s, not %q", ErrNotYourArea, id, strings.Join(p.Ledger.Write, ", "), rel)
+			if canSee(p, f) {
+				return nil, fmt.Errorf("%w: %s may write %s, not %q", ErrNotYourArea, id, strings.Join(p.Ledger.Write, ", "), rel)
+			}
+			return nil, fmt.Errorf("%w: %s may write %s; this change also touches %d file(s) outside your ledger areas", ErrNotYourArea, id, strings.Join(p.Ledger.Write, ", "), hidden)
 		}
 	}
 
