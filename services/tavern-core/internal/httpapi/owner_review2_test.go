@@ -1,7 +1,7 @@
 package httpapi
 
-// 2ª rodada da revisão do PR #21: o 415 (jsonOnly), o Check() do owner token e
-// os cantos do prefixo /api/ que o middleware usa para isentar.
+// Second security review of PR #21: the 415 (jsonOnly), the
+// owner token's Check() and the corners of the /api/ prefix the middleware exempts.
 
 import (
 	"context"
@@ -62,22 +62,22 @@ func qa3Do(t *testing.T, srv *httptest.Server, method, path, ctype, body, token 
 	return res
 }
 
-// O middleware isenta por prefixo de caminho: /api/../tasks não pode chegar ao
-// handler interno sem JSON (CSRF com text/plain).
+// The middleware exempts by path prefix: /api/../tasks must not reach the
+// internal handler without JSON (CSRF with text/plain).
 func TestQAJsonOnlyPathExemption(t *testing.T) {
 	_, svc, srv := qa3Desk(t, "shared-tok", strings.Repeat("o", 48))
 	for _, path := range []string{"/api/../tasks", "/api/%2e%2e/tasks", "/api/..%2ftasks", "//api/../tasks", "/api/../actions/answer", "/api/%2E%2E/tasks"} {
 		res := qa3Do(t, srv, "POST", path, "text/plain", `{"title":"csrf","priority":"P2","requested_by":"owner"}`, "")
 		ts, _ := svc.List(context.Background())
 		if len(ts) > 0 {
-			t.Fatalf("BYPASS CSRF: %s criou tarefa (%d) com status %d", path, len(ts), res.StatusCode)
+			t.Fatalf("BYPASS CSRF: %s created a task (%d) with status %d", path, len(ts), res.StatusCode)
 		}
 		t.Logf("%-24s -> %d location=%q", path, res.StatusCode, res.Header.Get("Location"))
 	}
 }
 
-// Um cliente cru (curl --path-as-is) manda /api/../tasks sem o Go limpar o
-// caminho: o middleware isenta por prefixo, então é o mux que tem de barrar.
+// A raw client (curl --path-as-is) sends /api/../tasks without Go cleaning the
+// path: the middleware exempts by prefix, so the mux has to stop it.
 func TestQAJsonOnlyRawPath(t *testing.T) {
 	_, svc, srv := qa3Desk(t, "shared-tok", strings.Repeat("o", 48))
 	addr := strings.TrimPrefix(srv.URL, "http://")
@@ -96,11 +96,11 @@ func TestQAJsonOnlyRawPath(t *testing.T) {
 		conn.Close()
 		line := strings.SplitN(string(raw), "\r\n", 2)[0]
 		if strings.Contains(line, "201") || strings.Contains(line, "200") {
-			t.Errorf("BYPASS cru: %s -> %s", path, line)
+			t.Errorf("raw BYPASS: %s -> %s", path, line)
 		}
 		ts, _ := svc.List(context.Background())
 		if len(ts) > 0 {
-			t.Fatalf("BYPASS cru: %s criou tarefa (%s)", path, line)
+			t.Fatalf("raw BYPASS: %s created a task (%s)", path, line)
 		}
 		t.Logf("%-22s -> %s", path, line)
 	}
@@ -113,31 +113,31 @@ func TestQAJsonOnlyContentTypes(t *testing.T) {
 		"multipart/form-data; boundary=b", "application/jsonx", "application/json-patch+json", "text/json"}
 	for _, ct := range deny {
 		if res := qa3Do(t, srv, "POST", "/tasks", ct, body, ""); res.StatusCode != http.StatusUnsupportedMediaType {
-			t.Errorf("Content-Type %q deveria dar 415, veio %d", ct, res.StatusCode)
+			t.Errorf("Content-Type %q: want 415, got %d", ct, res.StatusCode)
 		}
 	}
 	allow := []string{"application/json", "application/json; charset=utf-8", "Application/JSON", " application/json "}
 	for _, ct := range allow {
 		if res := qa3Do(t, srv, "POST", "/tasks", ct, body, ""); res.StatusCode/100 != 2 {
-			t.Errorf("Content-Type %q deveria passar, veio %d", ct, res.StatusCode)
+			t.Errorf("Content-Type %q: want it accepted, got %d", ct, res.StatusCode)
 		}
 	}
 	ts, _ := svc.List(context.Background())
 	if len(ts) != len(allow) {
-		t.Errorf("tarefas criadas = %d, esperado %d", len(ts), len(allow))
+		t.Errorf("tasks created = %d, want %d", len(ts), len(allow))
 	}
-	// GET e OPTIONS não são afetados.
+	// GET and OPTIONS are not affected.
 	if res := qa3Do(t, srv, "GET", "/tasks", "", "", ""); res.StatusCode != http.StatusOK {
 		t.Errorf("GET /tasks: %d", res.StatusCode)
 	}
 	res := qa3Do(t, srv, "OPTIONS", "/tasks", "", "", "")
 	if res.Header.Get("Access-Control-Allow-Origin") != "" {
-		t.Errorf("OPTIONS devolveu CORS: %q", res.Header.Get("Access-Control-Allow-Origin"))
+		t.Errorf("OPTIONS answered with CORS: %q", res.Header.Get("Access-Control-Allow-Origin"))
 	}
 	t.Logf("OPTIONS /tasks -> %d", res.StatusCode)
 }
 
-// Check(): curto, colidindo com o compartilhado e com o de um hireling.
+// Check(): short, equal to the shared token, equal to a hireling's token.
 func TestQACheckRefusesWeakOrShared(t *testing.T) {
 	cases := map[string]struct{ owner, shared string }{
 		"curto":         {"abc", "shared-tok"},
@@ -153,29 +153,29 @@ func TestQACheckRefusesWeakOrShared(t *testing.T) {
 		err := d.Check()
 		if name == "ok" {
 			if err != nil {
-				t.Errorf("ok deveria passar: %v", err)
+				t.Errorf("a valid token must pass: %v", err)
 			}
 			continue
 		}
 		if err == nil {
-			t.Errorf("%s: Check() aceitou", name)
+			t.Errorf("%s: Check() accepted it", name)
 			continue
 		}
 		if len(c.owner) > 4 && strings.Contains(err.Error(), c.owner) {
-			t.Errorf("%s: a mensagem carrega o token", name)
+			t.Errorf("%s: the message carries the token", name)
 		}
 		t.Logf("%s: %v", name, err)
 	}
 }
 
-// Sem Check, uma colisão tem de fechar as rotas do owner (defesa em profundidade).
+// Without Check, a collision must keep the owner's routes closed (defence in depth).
 func TestQACollisionClosedWithoutCheck(t *testing.T) {
 	_, _, srv := qa3Desk(t, "shared-tok", "shared-tok")
 	if res := qa3Do(t, srv, "GET", "/api/tasks", "", "", "shared-tok"); res.StatusCode != http.StatusUnauthorized {
-		t.Errorf("colisão com o compartilhado abriu /api/tasks: %d", res.StatusCode)
+		t.Errorf("collision with the shared token opened /api/tasks: %d", res.StatusCode)
 	}
 	_, _, srv2 := qa3Desk(t, "shared-tok", "test-tok")
 	if res := qa3Do(t, srv2, "GET", "/api/tasks", "", "", "test-tok"); res.StatusCode != http.StatusUnauthorized {
-		t.Errorf("colisão com o token do hireling abriu /api/tasks: %d", res.StatusCode)
+		t.Errorf("collision with a hireling's token opened /api/tasks: %d", res.StatusCode)
 	}
 }
