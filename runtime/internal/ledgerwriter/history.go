@@ -88,6 +88,8 @@ func historyPaths(p *profile.Profile, rel string) ([]string, error) {
 }
 
 // History lists the commits that changed a page (or the caller's area).
+// Each commit lists every file it touched, so a move into the area shows
+// where the page came from (and why a revert of it may be refused).
 func (w *Writer) History(ctx context.Context, id, page string, limit int) ([]Commit, error) {
 	p, err := w.profileOf(id)
 	if err != nil {
@@ -109,7 +111,7 @@ func (w *Writer) History(ctx context.Context, id, page string, limit int) ([]Com
 	if err := w.ensure(ctx); err != nil {
 		return nil, err
 	}
-	args := []string{"log", fmt.Sprintf("-n%d", limit), "--name-only", "--format=%x1e%H%x1f%an%x1f%aI%x1f%s", "--"}
+	args := []string{"log", fmt.Sprintf("-n%d", limit), "--name-only", "--no-renames", "--full-diff", "--format=%x1e%H%x1f%an%x1f%aI%x1f%s", "--"}
 	args = append(args, paths...)
 	out, err := w.git(ctx, args...)
 	if err != nil {
@@ -118,8 +120,9 @@ func (w *Writer) History(ctx context.Context, id, page string, limit int) ([]Com
 	return parseLog(out), nil
 }
 
-// parseLog reads `git log --name-only` with \x1e between commits and \x1f
-// between fields (the same separators the command asks for).
+// parseLog reads `git log --name-only --no-renames --full-diff` (every file of
+// each listed commit, both sides of a rename) with \x1e between commits and
+// \x1f between fields (the same separators the command asks for).
 func parseLog(out string) []Commit {
 	commits := []Commit{}
 	for _, block := range strings.Split(out, "\x1e") {
@@ -143,9 +146,11 @@ func parseLog(out string) []Commit {
 	return commits
 }
 
-// commitPaths is the list of files one commit touched.
+// commitPaths is the list of files one commit touched. --no-renames lists
+// both sides of a rename (a move is a deletion plus an addition), so the area
+// check sees the path a revert would recreate, not only the destination.
 func (w *Writer) commitPaths(ctx context.Context, sha string) ([]string, error) {
-	out, err := w.git(ctx, "show", "--name-only", "--format=", sha)
+	out, err := w.git(ctx, "show", "--name-only", "--no-renames", "--format=", sha)
 	if err != nil {
 		return nil, err
 	}

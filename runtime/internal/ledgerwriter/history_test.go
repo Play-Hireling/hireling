@@ -198,3 +198,64 @@ func TestHistoryAndRevertHandler(t *testing.T) {
 		t.Fatalf("unidentified revert: %d", code)
 	}
 }
+
+// A revert considers both sides of a rename: a commit that moved a page from
+// another hireling's area into the caller's is not the caller's to undo, since
+// the undo would recreate the page outside its area.
+func TestRevertRenameCannotEscapeArea(t *testing.T) {
+	w, bare := setup(t)
+	ctx := context.Background()
+	seed := filepath.Join(t.TempDir(), "s")
+	run(t, filepath.Dir(seed), "clone", "--quiet", bare, seed)
+	if err := os.MkdirAll(filepath.Join(seed, "brain", "learnings", "social-media"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(seed, "brain", "learnings", "dev"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	page := filepath.Join(seed, "brain", "learnings", "social-media", "x.md")
+	if err := os.WriteFile(page, []byte(learning("social-media", "social-media")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, seed, "add", "-A")
+	run(t, seed, "commit", "--quiet", "-m", "add page")
+	run(t, seed, "mv", "brain/learnings/social-media/x.md", "brain/learnings/dev/x.md")
+	run(t, seed, "commit", "--quiet", "-m", "move to dev")
+	run(t, seed, "push", "--quiet", "origin", "HEAD:main")
+
+	hist, err := w.History(ctx, "dev", "", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mv *Commit
+	for i := range hist {
+		if hist[i].Subject == "move to dev" {
+			mv = &hist[i]
+		}
+	}
+	if mv == nil {
+		t.Fatalf("the move is not in dev's history: %+v", hist)
+	}
+	// The history shows both sides of the move.
+	want := map[string]bool{"brain/learnings/social-media/x.md": true, "brain/learnings/dev/x.md": true}
+	for _, p := range mv.Paths {
+		delete(want, p)
+	}
+	if len(want) != 0 {
+		t.Fatalf("history paths = %v, missing %v", mv.Paths, want)
+	}
+
+	if _, err := w.Revert(ctx, "dev", mv.Commit, "undo the move"); !errors.Is(err, ErrNotYourArea) {
+		t.Fatalf("dev reverted a move out of social-media's area: err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(w.Dir, "brain", "learnings", "social-media", "x.md")); err == nil {
+		t.Fatal("the refused revert recreated social-media's page")
+	}
+	if out := run(t, w.Dir, "status", "--porcelain"); strings.TrimSpace(out) != "" {
+		t.Fatalf("clone left dirty: %q", out)
+	}
+	// A planner curates any page of the brain, so it may undo the move.
+	if _, err := w.Revert(ctx, "innkeeper", mv.Commit, "undo the move"); err != nil {
+		t.Fatalf("planner revert: %v", err)
+	}
+}
