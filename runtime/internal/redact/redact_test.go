@@ -34,6 +34,15 @@ func TestPatterns(t *testing.T) {
 		"rk_" + "live_abcdefghijklmnopqrstuvwx",
 		"AI" + "zaSyA1234567890abcdefghijklmnopqrstu",
 		"composio ak_AbCdEf0123456789xyzAB",
+		// More shapes from the review (split so secret scanners skip them).
+		"hf_" + "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789",
+		"AS" + "IAABCDEFGHIJKLMNOP",
+		"glpat-" + "AbCdEfGhIjKlMnOpQrSt",
+		"glpat-" + "aB1-aB1-aB1-aB1-aB1-",
+		"DEEPSEEK_API_KEY=" + "abc123def456",
+		"S" + "K0123456789abcdef0123456789abcdef",
+		"sk_" + "test_abcdefghijklmnopqrstuvwx",
+		"https://hooks.slack.com/" + "services/T000/B000/XXXXXXXXXXXX",
 	}
 	for _, c := range cases {
 		if out := r.Text(c); !strings.Contains(out, Hidden) {
@@ -49,6 +58,10 @@ func TestKeysAndTokensMaskedWhole(t *testing.T) {
 	pem := "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----"
 	if out := r.Text(pem); strings.Contains(out, "MIIEvQ") || !strings.Contains(out, Hidden) {
 		t.Fatalf("pem: %q", out)
+	}
+	cut := "key:\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC"
+	if out := r.Text(cut); strings.Contains(out, "MIIEvQ") || !strings.Contains(out, Hidden) {
+		t.Fatalf("cut pem: %q", out)
 	}
 	jwt := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk"
 	if out := r.Text(jwt); strings.Contains(out, "eyJhbGci") || strings.Contains(out, "dBjftJe") || !strings.Contains(out, Hidden) {

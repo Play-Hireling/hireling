@@ -41,6 +41,8 @@ ledger-writer also serves the history of the Ledger and undoes a change, on the 
 - `GET /history?path=&limit=` lists the commits that touched one page (`limit` default 20, at most 100). Without `path` it lists the caller's own `learnings/<id>/`; a planner (the Innkeeper) sees the whole `brain/`. Each commit lists the files it touched inside the caller's `ledger.read` and `ledger.write` areas; the others are only counted (`hidden`), so the history never names a page the caller cannot read. A planner sees every file.
 - `POST /revert {"commit": "…", "reason": "…"}` writes the undo as a **new commit**, authored by the asking hireling (`revert(<id>): …`), and pushes. History is never rewritten.
 
+Pages pass through the redactor before they reach ledger-writer, and it masks any 32+ character hex string, so cite a commit by its short hash (7–12 characters): a full 40-character SHA in a page becomes `[hidden]`.
+
 Who may revert what:
 
 - a hireling reverts only commits whose every file is inside its `ledger.write` areas;

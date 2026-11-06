@@ -108,7 +108,7 @@ With `"use": true` the check is the real thing, just before the action runs:
 - `capped` counts the use in its window (UTC day or ISO week, D2) and runs while under the cap;
 - at the cap, or for an `owner` action, it is blocked — and the block is remembered so it can ride on the hireling's next `ask` card.
 
-**Your yes is the way through.** When you approve the card, each action it carried gets **one use within 24 hours** for that hireling only; the next check consumes it. Everything lives in tavern-core, so a hireling cannot write itself a permission: tavern-core grants only when the Front Desk shows that **you** answered that hireling's decision (only the owner token can answer), and it uses the option you chose there, whatever the hireling sends.
+**Your yes is the way through.** When you approve the card, each action it carried gets **one use within 24 hours** for that hireling only; the next check consumes it. Everything lives in tavern-core, so a hireling cannot write itself a permission: the card is tied to one open decision of that hireling before you answer, the Front Desk writes on the decision what a yes grants (`Choosing "Yes" grants dev one use of: merge_pr.`), and tavern-core grants only when the Front Desk shows that **you** chose that option (only the owner token can answer). An answered decision takes no new card, so an old yes is never reused. Read that line before you approve: it, not the hireling's question, says what the yes allows.
 
 A cap of `0` means *none without you*, never "unlimited". A cap given in dollars (for example `ad_spend_usd`) cannot be counted from a tool call, so every spend is yours until the gate can read the amount.
 
