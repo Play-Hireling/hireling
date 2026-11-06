@@ -1071,7 +1071,13 @@ func (l *Loop) applyAsk(ctx context.Context, task, turn, answer string, since ti
 			ctxText = strings.TrimSpace(ctxText + "\n\n" + line)
 		}
 	}
-	id, err := l.Client.RequestDecision(ctx, frontdesk.DecisionRequest{From: l.Profile.DeskID, Question: a.Question, Options: a.Options, Context: l.Redactor.Text(ctxText), Urgency: a.Urgency})
+	options := a.Options
+	if len(blocked) > 0 {
+		// D1: tavern-core grants the card on the first plain yes among the
+		// options; a card without one could never be granted.
+		options = withYes(options)
+	}
+	id, err := l.Client.RequestDecision(ctx, frontdesk.DecisionRequest{From: l.Profile.DeskID, Question: a.Question, Options: options, Context: l.Redactor.Text(ctxText), Urgency: a.Urgency})
 	if err != nil {
 		l.logf("ask: %v", err)
 		return rest + "\n\n(decision not opened: " + l.Redactor.Summary(err.Error()) + ")", ""

@@ -96,6 +96,8 @@ type Decision struct {
 	// Card is what a yes grants, written by tavern-core when a gate card is
 	// bound to the decision (D1); never taken from the hireling.
 	Card string `json:"card,omitempty"`
+	// CardYes is the option that grants the card (the first plain yes).
+	CardYes string `json:"card_yes,omitempty"`
 }
 
 // State is everything the desk remembers.
@@ -559,7 +561,7 @@ func (d *Desk) newDecision(w http.ResponseWriter, r *http.Request) {
 	if body.Urgency == "" {
 		body.Urgency = "normal"
 	}
-	body.ID, body.At, body.Chosen, body.Card = newID("d-"), d.stamp(), "", ""
+	body.ID, body.At, body.Chosen, body.Card, body.CardYes = newID("d-"), d.stamp(), "", "", ""
 	body.Question, body.Context = cut(body.Question, 300), cut(body.Context, 1000)
 	d.mu.Lock()
 	d.st.Decisions = append(d.st.Decisions, body)

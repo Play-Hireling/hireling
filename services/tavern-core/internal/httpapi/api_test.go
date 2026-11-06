@@ -836,6 +836,37 @@ func TestAnswerNeedsTheOwnersAnswer(t *testing.T) {
 	if l := used("dev", "payment"); l == policy.Free {
 		t.Fatal("payment became free through a cut card")
 	}
+	// The option that grants is the first plain yes, whatever the order: with
+	// ["No","Approve"] the owner's "No" grants nothing; with a "Not now"
+	// recommendation first, "Go ahead" grants.
+	openWith := func(options string) string {
+		t.Helper()
+		var out struct{ Decision frontdesk.Decision }
+		if code := deskCall("/api/decisions", desk.SharedToken, `{"from":"builder","question":"Merge the PR?","options":`+options+`}`, &out); code != 200 {
+			t.Fatalf("open %s: %d", options, code)
+		}
+		return out.Decision.ID
+	}
+	noFirst := openWith(`["No","Approve"]`)
+	pend(noFirst, "dev")
+	if x := get(noFirst); !strings.HasPrefix(x.Context, `Choosing "Approve" grants dev`) {
+		t.Fatalf("the card names the wrong option: %q", x.Context)
+	}
+	choose(noFirst, "No")
+	if code, ans := ask(noFirst, "dev"); code != 200 || len(ans.Granted) != 0 {
+		t.Fatalf("the owner's No granted: %d %+v", code, ans)
+	}
+	notNow := openWith(`["Not now","Go ahead"]`)
+	pend(notNow, "dev")
+	choose(notNow, "Go ahead")
+	if code, ans := ask(notNow, "dev"); code != 200 || len(ans.Granted) != 1 {
+		t.Fatalf("Go ahead after a Not now recommendation: %d %+v", code, ans)
+	}
+	// A decision with no yes among its options takes no card.
+	if code := pendAs(openWith(`["No","Later"]`), "dev", "merge_pr", "Approve"); code != 400 {
+		t.Fatalf("a card on a decision without a yes: %d", code)
+	}
+
 	// The desk's line comes first in the context the owner reads.
 	d8 := open("builder")
 	pend(d8, "dev")

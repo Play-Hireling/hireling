@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/Play-Hireling/hireling/services/tavern-core/internal/policy"
 )
 
 // Errors of the grant proof (D1/D3).
@@ -21,6 +23,10 @@ var (
 	// ErrCardTooLong means the card's line would not fit whole: a cut line
 	// could hide an action that a yes grants, so the card is refused.
 	ErrCardTooLong = errors.New("frontdesk: the card names more than the decision can show")
+	// ErrNotAffirmative means no option of the decision is a plain yes: the
+	// option that grants is always one (Approve, Yes, OK …), so a hireling
+	// cannot make "No" the option that grants.
+	ErrNotAffirmative = errors.New("frontdesk: the decision offers no yes (Approve, Yes, OK …) to grant on")
 )
 
 // maxCard bounds the line tavern-core adds to a decision's context. The line
@@ -30,8 +36,8 @@ const maxCard = 400
 // Bind attaches a gate card to decisionID before the owner answers it (D1).
 // The decision must be open, opened by deskID, and carry no card yet. The
 // desk writes, in its own words, what a yes grants into the context the owner
-// reads, and returns the option that grants: the first one offered, never an
-// option the hireling names.
+// reads, and returns the option that grants: the first plain yes offered,
+// never an option the hireling names.
 func (d *Desk) Bind(ctx context.Context, decisionID, agent, deskID string, actions []string) (string, error) {
 	decisionID, deskID = strings.TrimSpace(decisionID), strings.TrimSpace(deskID)
 	if decisionID == "" || deskID == "" || len(actions) == 0 {
@@ -54,16 +60,29 @@ func (d *Desk) Bind(ctx context.Context, decisionID, agent, deskID string, actio
 		case len(x.Options) == 0:
 			return "", fmt.Errorf("%w: decision %s offers no option", ErrNotApproved, x.ID)
 		}
-		card := fmt.Sprintf("Choosing %q grants %s one use of: %s.", x.Options[0], agent, strings.Join(actions, ", "))
+		// The option that grants is the first plain yes among the options
+		// (the first option is the hireling's recommendation, which may be
+		// "Not now"); never an option the hireling names on its card.
+		yes := ""
+		for _, o := range x.Options {
+			if policy.Approves(o, "") {
+				yes = o
+				break
+			}
+		}
+		if yes == "" {
+			return "", fmt.Errorf("%w: decision %s offers %q", ErrNotAffirmative, x.ID, x.Options)
+		}
+		card := fmt.Sprintf("Choosing %q grants %s one use of: %s.", yes, agent, strings.Join(actions, ", "))
 		if n := len([]rune(card)); n > maxCard {
 			return "", fmt.Errorf("%w: %d actions, %d characters (at most %d)", ErrCardTooLong, len(actions), n, maxCard)
 		}
 		// The desk's line goes first, so a line the hireling wrote in its own
 		// context cannot come after it and read as the last word.
-		x.Card = card
+		x.Card, x.CardYes = card, yes
 		x.Context = strings.TrimSpace(x.Card + "\n\n" + x.Context)
 		d.save(ctx)
-		return x.Options[0], nil
+		return yes, nil
 	}
 	return "", fmt.Errorf("%w: no decision %s", ErrNotApproved, decisionID)
 }
@@ -72,7 +91,7 @@ func (d *Desk) Bind(ctx context.Context, decisionID, agent, deskID string, actio
 // (D1/D3). tavern-core shares its network with every hireling, so the body of
 // POST /actions/answer proves nothing on its own; the desk's record does,
 // because only the owner token can answer a decision. It returns the option
-// the owner chose on decisionID and the option that grants (the first one);
+// the owner chose on decisionID and the option that grants (set by Bind);
 // deskID must have opened the decision and a card must be bound to it.
 func (d *Desk) Confirm(_ context.Context, decisionID, agent, deskID string) (chosen, approve string, err error) {
 	decisionID, deskID = strings.TrimSpace(decisionID), strings.TrimSpace(deskID)
@@ -90,10 +109,10 @@ func (d *Desk) Confirm(_ context.Context, decisionID, agent, deskID string) (cho
 			return "", "", fmt.Errorf("%w: decision %s was opened by %s, not %s", ErrNotApproved, x.ID, x.From, agent)
 		case x.Chosen == "":
 			return "", "", fmt.Errorf("%w: decision %s is still open", ErrNotApproved, x.ID)
-		case x.Card == "" || len(x.Options) == 0:
+		case x.Card == "" || x.CardYes == "":
 			return "", "", fmt.Errorf("%w: decision %s carries no card", ErrNotApproved, x.ID)
 		}
-		return x.Chosen, x.Options[0], nil
+		return x.Chosen, x.CardYes, nil
 	}
 	return "", "", fmt.Errorf("%w: no decision %s", ErrNotApproved, decisionID)
 }

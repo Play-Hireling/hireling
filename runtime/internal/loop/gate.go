@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/Play-Hireling/hireling/runtime/internal/plan"
 	"github.com/Play-Hireling/hireling/runtime/internal/tavern"
 )
 
@@ -19,6 +21,27 @@ type GateGrants interface {
 	RecentBlocked(ctx context.Context, since time.Time) ([]GateAct, error)
 	Pend(ctx context.Context, decision string, acts []GateAct, approve string) error
 	Answer(ctx context.Context, decision, choice string) ([]GateAct, error)
+}
+
+// yesWord is a plain yes as tavern-core reads it (policy.Approves): the card
+// is granted on the first option that starts with one.
+var yesWord = regexp.MustCompile(`(?i)^\s*(approve|approved|yes|ok|okay|go|go ahead|do it|allow|confirm)\b`)
+
+// withYes makes sure a card that carries blocked actions offers a plain yes:
+// without one tavern-core refuses the card and the owner's answer could grant
+// nothing. "Approve" is added (in place of the last option when all six are
+// taken).
+func withYes(options []string) []string {
+	for _, o := range options {
+		if yesWord.MatchString(o) {
+			return options
+		}
+	}
+	out := append([]string{}, options...)
+	if len(out) >= plan.MaxOptions {
+		out = out[:plan.MaxOptions-1]
+	}
+	return append(out, "Approve")
 }
 
 // grantLine is the line on the owner's card that says what a yes allows.

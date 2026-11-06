@@ -114,3 +114,19 @@ func TestTurnFileForTheGate(t *testing.T) {
 		t.Fatalf("turn file = %s (%v)", raw, err)
 	}
 }
+
+// A card that carries blocked actions offers a plain yes, which tavern-core
+// grants on; options that already have one are left as they are.
+func TestWithYes(t *testing.T) {
+	for _, c := range []struct{ in, want []string }{
+		{[]string{"Merge now", "Wait"}, []string{"Merge now", "Wait", "Approve"}},
+		{[]string{"Not now", "Go ahead"}, []string{"Not now", "Go ahead"}},
+		{[]string{"Yes, merge", "No"}, []string{"Yes, merge", "No"}},
+		{[]string{"a", "b", "c", "d", "e", "f"}, []string{"a", "b", "c", "d", "e", "Approve"}},
+		{[]string{"Okra soup", "Gopher"}, []string{"Okra soup", "Gopher", "Approve"}},
+	} {
+		if got := withYes(c.in); strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("withYes(%v) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
