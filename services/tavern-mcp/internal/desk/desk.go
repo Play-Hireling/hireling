@@ -1,6 +1,7 @@
 // Package desk is the owner's client of a tavern: the Front Desk API
-// (docs/api/front-desk.md) plus the read-only task board and quest that
-// tavern-core serves next to it (GET /tasks, GET /goal).
+// (docs/api/front-desk.md), including the owner's read-only task board and
+// quest (GET /api/tasks, /api/tasks/{id}, /api/quest). Every call is under
+// /api/* and carries the owner token.
 //
 // The owner token is sent as a bearer header on every request and nowhere
 // else: errors never carry it, response bodies are scrubbed of it, and
@@ -41,7 +42,7 @@ type Config struct {
 // FromEnv reads the configuration:
 //
 //	FRONTDESK_URL      base URL (falls back to TAVERN_URL, then DefaultURL)
-//	FRONTDESK_TOKEN    the owner token (falls back to FRONTDESK_OWNER_TOKEN)
+//	FRONTDESK_OWNER_TOKEN  the owner token (FRONTDESK_TOKEN is accepted as a fallback)
 //	FRONTDESK_ALLOW_HTTP=1  allow http:// to a non-loopback host
 //	CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET  optional
 func FromEnv(getenv func(string) string) (Config, error) {
@@ -55,7 +56,7 @@ func FromEnv(getenv func(string) string) (Config, error) {
 	}
 	c := Config{
 		URL:            first("FRONTDESK_URL", "TAVERN_URL"),
-		Token:          first("FRONTDESK_TOKEN", "FRONTDESK_OWNER_TOKEN"),
+		Token:          first("FRONTDESK_OWNER_TOKEN", "FRONTDESK_TOKEN"),
 		CFAccessID:     first("CF_ACCESS_CLIENT_ID"),
 		CFAccessSecret: first("CF_ACCESS_CLIENT_SECRET"),
 		AllowHTTP:      first("FRONTDESK_ALLOW_HTTP") == "1",
@@ -70,14 +71,14 @@ func FromEnv(getenv func(string) string) (Config, error) {
 // contain the token.
 func (c *Config) Validate() error {
 	if c.Token == "" {
-		return errors.New("FRONTDESK_TOKEN is not set: pass the tavern's owner token (FRONTDESK_OWNER_TOKEN in the box's .env)")
+		return errors.New("FRONTDESK_OWNER_TOKEN is not set: pass the tavern's owner token (FRONTDESK_OWNER_TOKEN in the box's .env)")
 	}
 	u, err := url.Parse(c.URL)
 	if err != nil || u.Host == "" {
 		return errors.New("FRONTDESK_URL must be an absolute URL such as http://127.0.0.1:8080")
 	}
 	if u.User != nil {
-		return errors.New("FRONTDESK_URL must not carry credentials; the owner token goes in FRONTDESK_TOKEN")
+		return errors.New("FRONTDESK_URL must not carry credentials; the owner token goes in FRONTDESK_OWNER_TOKEN")
 	}
 	switch u.Scheme {
 	case "https":
@@ -225,7 +226,7 @@ func explain(status int, data []byte) string {
 	}
 	switch status {
 	case http.StatusUnauthorized:
-		msg += " (FRONTDESK_TOKEN must be the tavern's owner token)"
+		msg += " (FRONTDESK_OWNER_TOKEN must be the tavern's owner token, not a hireling's)"
 	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
 		msg += " (redirects are not followed; point FRONTDESK_URL at the final address)"
 	}

@@ -48,7 +48,7 @@ Everything is configured with environment variables (per service) and the hireli
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `FRONTDESK_URL` | `TAVERN_URL`, else `http://127.0.0.1:8080` | The tavern to manage |
-| `FRONTDESK_TOKEN` | `FRONTDESK_OWNER_TOKEN` | **Required.** The owner token |
+| `FRONTDESK_OWNER_TOKEN` | `FRONTDESK_TOKEN` | **Required.** The owner token (`FRONTDESK_TOKEN` is read only when it is unset) |
 | `FRONTDESK_ALLOW_HTTP` | — | `1` allows `http://` to a non-loopback host (otherwise `https://` only) |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | — | Only when the tavern sits behind Cloudflare Access |
 

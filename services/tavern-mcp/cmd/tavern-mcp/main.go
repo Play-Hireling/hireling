@@ -3,7 +3,7 @@
 // decisions, tasks and the quest (docs/guides/claude-code-mcp.md).
 //
 //	FRONTDESK_URL      tavern-core (default http://127.0.0.1:8080; falls back to TAVERN_URL)
-//	FRONTDESK_TOKEN    the owner token (falls back to FRONTDESK_OWNER_TOKEN)
+//	FRONTDESK_OWNER_TOKEN  the owner token (FRONTDESK_TOKEN is accepted as a fallback)
 //	FRONTDESK_ALLOW_HTTP=1  allow plain http:// to a non-loopback host
 //	CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET  optional, behind Cloudflare Access
 //

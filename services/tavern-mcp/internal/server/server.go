@@ -6,11 +6,14 @@
 //	send_order       POST /api/command                 give a hireling an order
 //	tavern_status    GET  /api/status                  the party, open decisions, conversations
 //	list_decisions   GET  /api/decisions               what is waiting on the owner
-//	get_decision     GET  /api/decisions (one id)      one open decision
+//	get_decision     GET  /api/decisions/{id}          one decision, open or answered
 //	choose_option    POST /api/decisions/{id}/choose   OWNER ACTION: answer a decision
-//	list_tasks       GET  /tasks                       the task board (filters: owner, status)
-//	get_task         GET  /tasks/{id}                  one task with its history
-//	get_quest        GET  /goal                        the shared quest
+//	list_tasks       GET  /api/tasks                   the task board (filters: owner, status)
+//	get_task         GET  /api/tasks/{id}              one task with its history
+//	get_quest        GET  /api/quest                   the shared quest
+//
+// Every call is under /api/* with the owner token, so a proxy that exposes
+// only /api/* serves all of them.
 //
 // Resources: tavern://status, tavern://decisions, tavern://tasks,
 // tavern://quest and the templates tavern://decisions/{id}, tavern://tasks/{id}.
@@ -77,9 +80,10 @@ func New(c *desk.Client) *mcp.Server {
 	}, h.listDecisions)
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_decision",
-		Title:       "Read one decision",
-		Description: "One open decision by id, with its question, options and context. Reading it changes nothing.",
+		Name:  "get_decision",
+		Title: "Read one decision",
+		Description: "One decision by id, with its question, options and context; it may be open or already answered " +
+			"(then `chosen` holds the owner's answer). Reading it changes nothing.",
 		Annotations: &mcp.ToolAnnotations{Title: "Read a decision", ReadOnlyHint: true, OpenWorldHint: &no},
 	}, h.getDecision)
 
@@ -127,13 +131,13 @@ func New(c *desk.Client) *mcp.Server {
 	s.AddResource(&mcp.Resource{URI: "tavern://decisions", Name: "decisions", Title: "Open decisions", MIMEType: js,
 		Description: "Decisions waiting on the owner (GET /api/decisions)."}, h.readStatic)
 	s.AddResource(&mcp.Resource{URI: "tavern://tasks", Name: "tasks", Title: "Task board", MIMEType: js,
-		Description: "Every task on the board (GET /tasks)."}, h.readStatic)
+		Description: "Every task on the board (GET /api/tasks)."}, h.readStatic)
 	s.AddResource(&mcp.Resource{URI: "tavern://quest", Name: "quest", Title: "The quest", MIMEType: js,
-		Description: "The shared goal and its progress (GET /goal)."}, h.readStatic)
-	s.AddResourceTemplate(&mcp.ResourceTemplate{URITemplate: "tavern://decisions/{id}", Name: "decision", Title: "One open decision", MIMEType: js,
-		Description: "One open decision by id."}, h.readDecision)
+		Description: "The shared goal and its progress (GET /api/quest)."}, h.readStatic)
+	s.AddResourceTemplate(&mcp.ResourceTemplate{URITemplate: "tavern://decisions/{id}", Name: "decision", Title: "One decision", MIMEType: js,
+		Description: "One decision by id, open or answered (GET /api/decisions/{id})."}, h.readDecision)
 	s.AddResourceTemplate(&mcp.ResourceTemplate{URITemplate: "tavern://tasks/{id}", Name: "task", Title: "One task", MIMEType: js,
-		Description: "One task by id, with its history."}, h.readTask)
+		Description: "One task by id, with its history (GET /api/tasks/{id})."}, h.readTask)
 
 	// Last line of defence: whatever goes back to the client is scrubbed of the token.
 	s.AddReceivingMiddleware(redactMiddleware(c))
@@ -228,11 +232,15 @@ func (h *handlers) getTask(ctx context.Context, _ *mcp.CallToolRequest, in TaskI
 	if id == "" {
 		return nil, nil, errors.New("id is required")
 	}
-	return h.get(ctx, "/tasks/"+url.PathEscape(id))
+	raw, err := h.one(ctx, "/api/tasks/"+url.PathEscape(id), "task")
+	if err != nil {
+		return nil, nil, err
+	}
+	return result(raw), nil, nil
 }
 
 func (h *handlers) quest(ctx context.Context, _ *mcp.CallToolRequest, _ NoIn) (*mcp.CallToolResult, any, error) {
-	raw, err := h.c.Do(ctx, http.MethodGet, "/goal", nil)
+	raw, err := h.one(ctx, "/api/quest", "quest")
 	if desk.NotFound(err) {
 		return nil, nil, errors.New("this tavern has no quest yet (set GOAL_TITLE and GOAL_TARGET in the box's .env, or PUT /goal)")
 	}
@@ -250,46 +258,48 @@ func (h *handlers) get(ctx context.Context, path string) (*mcp.CallToolResult, a
 	return result(raw), nil, nil
 }
 
-// errNoDecision: the Front Desk lists open decisions only.
-var errNoDecision = errors.New("no open decision with that id (it was already answered, or never existed); list_decisions shows the open ones")
+// errNoDecision: GET /api/decisions/{id} answered 404 (the desk keeps the last 200).
+var errNoDecision = errors.New("no decision with that id (it never existed, or it is too old to be kept); list_decisions shows the open ones")
 
-// decision finds one open decision in GET /api/decisions.
+// one reads GET path and returns the object under key ({"task": {...}} → {...}).
+func (h *handlers) one(ctx context.Context, path, key string) (json.RawMessage, error) {
+	raw, err := h.c.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil || len(obj[key]) == 0 || string(obj[key]) == "null" {
+		return nil, fmt.Errorf("front desk: GET %s: unexpected answer", path)
+	}
+	return obj[key], nil
+}
+
+// decision reads one decision, open or answered (GET /api/decisions/{id}).
 func (h *handlers) decision(ctx context.Context, id string) (json.RawMessage, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, errors.New("id is required")
 	}
-	raw, err := h.c.Do(ctx, http.MethodGet, "/api/decisions", nil)
-	if err != nil {
-		return nil, err
+	raw, err := h.one(ctx, "/api/decisions/"+url.PathEscape(id), "decision")
+	if desk.NotFound(err) {
+		return nil, errNoDecision
 	}
-	var list struct {
-		Decisions []json.RawMessage `json:"decisions"`
-	}
-	if err := json.Unmarshal(raw, &list); err != nil {
-		return nil, errors.New("front desk: GET /api/decisions: unexpected answer")
-	}
-	for _, d := range list.Decisions {
-		var x struct {
-			ID string `json:"id"`
-		}
-		if json.Unmarshal(d, &x) == nil && x.ID == id {
-			return d, nil
-		}
-	}
-	return nil, errNoDecision
+	return raw, err
 }
 
 // tasks reads the board and applies the filters, most recently updated first.
 func (h *handlers) tasks(ctx context.Context, in TasksIn) (json.RawMessage, error) {
-	raw, err := h.c.Do(ctx, http.MethodGet, "/tasks", nil)
+	raw, err := h.c.Do(ctx, http.MethodGet, "/api/tasks", nil)
 	if err != nil {
 		return nil, err
 	}
-	var all []json.RawMessage
-	if err := json.Unmarshal(raw, &all); err != nil {
-		return nil, errors.New("front desk: GET /tasks: unexpected answer")
+	var board struct {
+		Tasks []json.RawMessage `json:"tasks"`
 	}
+	if err := json.Unmarshal(raw, &board); err != nil || board.Tasks == nil {
+		return nil, errors.New("front desk: GET /api/tasks: unexpected answer")
+	}
+	all := board.Tasks
 	limit := in.Limit
 	if limit <= 0 {
 		limit = 50
@@ -361,7 +371,7 @@ func (h *handlers) readStatic(ctx context.Context, req *mcp.ReadResourceRequest)
 	case "tavern://tasks":
 		raw, err = h.tasks(ctx, TasksIn{Limit: 500})
 	case "tavern://quest":
-		raw, err = h.c.Do(ctx, http.MethodGet, "/goal", nil)
+		raw, err = h.one(ctx, "/api/quest", "quest")
 		if desk.NotFound(err) {
 			return nil, mcp.ResourceNotFoundError(uri)
 		}
@@ -405,7 +415,7 @@ func (h *handlers) readTask(ctx context.Context, req *mcp.ReadResourceRequest) (
 	if id == "" {
 		return nil, mcp.ResourceNotFoundError(uri)
 	}
-	raw, err := h.c.Do(ctx, http.MethodGet, "/tasks/"+url.PathEscape(id), nil)
+	raw, err := h.one(ctx, "/api/tasks/"+url.PathEscape(id), "task")
 	if desk.NotFound(err) {
 		return nil, mcp.ResourceNotFoundError(uri)
 	}

@@ -28,7 +28,7 @@ TAVERN_URL=https://tavern.example.com ./bin/tavern status     # a remote tavern 
 
 ## `tavern-mcp`
 
-The Tavern MCP server: `bin/tavern`'s commands as MCP tools and resources on stdio, for Claude Code and other MCP clients. Build with `make mcp` (→ `dist/tavern-mcp`) or `go install github.com/Play-Hireling/hireling/services/tavern-mcp/cmd/tavern-mcp@latest`. Reads `FRONTDESK_URL` (falls back to `TAVERN_URL`, default `http://127.0.0.1:8080`) and `FRONTDESK_TOKEN` (falls back to `FRONTDESK_OWNER_TOKEN`); it does not read `.env`.
+The Tavern MCP server: `bin/tavern`'s commands as MCP tools and resources on stdio, for Claude Code and other MCP clients. Build with `make mcp` (→ `dist/tavern-mcp`) or `go install github.com/Play-Hireling/hireling/services/tavern-mcp/cmd/tavern-mcp@latest`. Reads `FRONTDESK_URL` (falls back to `TAVERN_URL`, default `http://127.0.0.1:8080`) and `FRONTDESK_OWNER_TOKEN` (falls back to `FRONTDESK_TOKEN`); it does not read `.env`. It calls only the owner's `/api/*` routes.
 
 | Command | Does |
 | --- | --- |

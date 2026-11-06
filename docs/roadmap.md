@@ -10,7 +10,7 @@ What is coming to the open engine, roughly in order. Dates are intentions, not p
 
 ## Next — limits you can trust
 - **Token budget hard stop** (D7: over budget → only P0/P1).
-- **Authenticated task API** in tavern-core (per-hireling tokens everywhere, not only on the Front Desk).
+- **Authenticated task API** in tavern-core (per-hireling tokens everywhere, not only on the Front Desk). The owner's reads are already under `/api/*` with the owner token (`/api/tasks`, `/api/quest`); until the rest moves, the internal routes (`/tasks`, `/goal`, `/actions/*`, …) have no auth and must stay on the Compose network ([security](security.md)).
 - **Any OpenAI-compatible provider per hireling** (Anthropic, OpenAI, local models via vLLM/Ollama) with pricing tables.
 
 ## Later — a team that improves itself

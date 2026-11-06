@@ -20,7 +20,7 @@ func TestRunCheck(t *testing.T) {
 		w.Write([]byte(`{"agents":[{"id":"dev"},{"id":"innkeeper"}],"decisions":[{"id":"d-1"}]}`))
 	}))
 	defer srv.Close()
-	env := map[string]string{"FRONTDESK_URL": srv.URL, "FRONTDESK_TOKEN": tok}
+	env := map[string]string{"FRONTDESK_URL": srv.URL, "FRONTDESK_OWNER_TOKEN": tok}
 	var out, errb bytes.Buffer
 	if code := run([]string{"-check"}, func(k string) string { return env[k] }, &out, &errb); code != 0 {
 		t.Fatalf("code %d: %s", code, errb.String())
@@ -29,7 +29,7 @@ func TestRunCheck(t *testing.T) {
 		t.Fatalf("out: %s", out.String())
 	}
 
-	env["FRONTDESK_TOKEN"] = "wrong-token-value"
+	env["FRONTDESK_OWNER_TOKEN"] = "wrong-token-value"
 	out.Reset()
 	errb.Reset()
 	if code := run([]string{"-check"}, func(k string) string { return env[k] }, &out, &errb); code != 1 {
@@ -42,7 +42,7 @@ func TestRunCheck(t *testing.T) {
 
 func TestRunConfigErrors(t *testing.T) {
 	var out, errb bytes.Buffer
-	if code := run(nil, func(string) string { return "" }, &out, &errb); code != 1 || !strings.Contains(errb.String(), "FRONTDESK_TOKEN is not set") {
+	if code := run(nil, func(string) string { return "" }, &out, &errb); code != 1 || !strings.Contains(errb.String(), "FRONTDESK_OWNER_TOKEN is not set") {
 		t.Fatalf("code %d: %s", code, errb.String())
 	}
 	errb.Reset()

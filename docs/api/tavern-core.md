@@ -2,7 +2,7 @@
 
 tavern-core is the tavern's state: tasks with leases, priorities, the quest, usage and budgets, and the policy gate. It also serves the [Front Desk](front-desk.md).
 
-> **Internal API.** Everything below is meant for the internal Docker network. Callers identify themselves with the `X-Hireling: <id>` header (or an `agent` field in the body); there is no token. `compose.yaml` publishes tavern-core on **127.0.0.1 only** — never expose this port to the internet. Put a reverse proxy with authentication in front if you need remote access, and expose only `/api/*`. Authenticated task APIs are on the [roadmap](../roadmap.md).
+> **Internal API.** Everything below is meant for the internal Docker network. Callers identify themselves with the `X-Hireling: <id>` header (or an `agent` field in the body); there is no token. `compose.yaml` publishes tavern-core on **127.0.0.1 only** — never expose this port to the internet. Put a reverse proxy with authentication in front if you need remote access, and expose only `/api/*`. The owner's read-only board and quest are also served under `/api/*` with the owner token (`GET /api/tasks`, `/api/tasks/{id}`, `/api/quest`, see the [Front Desk API](front-desk.md)); the routes below stay unauthenticated, for the hirelings and `bin/tavern` on the box. Authenticated task writes are on the [roadmap](../roadmap.md).
 
 ## Health and agents
 

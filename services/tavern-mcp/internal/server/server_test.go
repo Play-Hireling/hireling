@@ -81,6 +81,14 @@ func (f *fakeDesk) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(200, `{"agents":[{"id":"innkeeper","pending":1}],"decisions":[`+decisionJSON+`],"interactions":[],"at":"2026-11-05T10:00:00Z"}`)
 	case "GET /api/decisions":
 		reply(200, `{"decisions":[`+decisionJSON+`]}`)
+	case "GET /api/decisions/d-1":
+		if f.decided {
+			reply(200, `{"decision":{"id":"d-1","from":"social-media","question":"When do we publish?","options":["Publish Friday","Wait a week"],"chosen":"Publish Friday"}}`)
+			return
+		}
+		reply(200, `{"decision":`+decisionJSON+`}`)
+	case "GET /api/decisions/d-404":
+		reply(404, `{"error":"no such decision"}`)
 	case "POST /api/decisions/d-1/choose":
 		if f.decided {
 			reply(409, `{"error":"already decided"}`)
@@ -94,23 +102,24 @@ func (f *fakeDesk) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(200, `{"decision":{"id":"d-1","chosen":"Publish Friday"},"command":{"id":"c-2","agent":"social-media","decisionId":"d-1"}}`)
 	case "POST /api/decisions/d-9/choose":
 		reply(404, `{"error":"no such decision"}`)
-	case "GET /tasks":
+	case "GET /api/tasks":
 		if f.tasksRaw != "" {
 			reply(200, f.tasksRaw)
 			return
 		}
-		reply(200, tasksJSON)
-	case "GET /tasks/T-1":
-		reply(200, `{"task":{"id":"T-1","title":"Plan the post"},"events":[]}`)
-	case "GET /tasks/T-404":
+		reply(200, `{"tasks":`+tasksJSON+`}`)
+	case "GET /api/tasks/T-1":
+		reply(200, `{"task":{"id":"T-1","title":"Plan the post","events":[]}}`)
+	case "GET /api/tasks/T-404":
 		reply(404, `{"error":"task not found"}`)
-	case "GET /goal":
+	case "GET /api/quest":
 		if f.noQuest {
 			reply(404, `{"error":"quest not set"}`)
 			return
 		}
-		reply(200, `{"title":"First 10 customers","target":10,"current":2,"percent":20,"bar":"[##--------] 20%"}`)
+		reply(200, `{"quest":{"title":"First 10 customers","target":10,"current":2,"percent":20,"bar":"[##--------] 20%"}}`)
 	default:
+		// The internal routes (/tasks, /goal) are not the owner's: the server must never call them.
 		reply(404, `{"error":"no route"}`)
 	}
 }
@@ -248,13 +257,28 @@ func TestStatusAndDecisions(t *testing.T) {
 	}
 
 	out = call(t, cs, "get_decision", map[string]any{"id": "d-1"}, false)
+	if r := f.last(t); r.Method != "GET" || r.Path != "/api/decisions/d-1" || r.Auth != "Bearer "+tok {
+		t.Fatalf("request: %+v", r)
+	}
 	var d map[string]any
-	if err := json.Unmarshal([]byte(out), &d); err != nil || d["id"] != "d-1" {
+	if err := json.Unmarshal([]byte(out), &d); err != nil || d["id"] != "d-1" || d["chosen"] != nil {
 		t.Fatalf("get_decision: %s", out)
 	}
 	out = call(t, cs, "get_decision", map[string]any{"id": "d-404"}, true)
-	if !strings.Contains(out, "no open decision") {
+	if !strings.Contains(out, "no decision with that id") {
 		t.Fatalf("out: %s", out)
+	}
+	// An answered decision is still readable, with the owner's choice.
+	call(t, cs, "choose_option", map[string]any{"id": "d-1", "option": "Publish Friday"}, false)
+	out = call(t, cs, "get_decision", map[string]any{"id": "d-1"}, false)
+	d = nil
+	if err := json.Unmarshal([]byte(out), &d); err != nil || d["chosen"] != "Publish Friday" {
+		t.Fatalf("answered decision: %s", out)
+	}
+	// The id is path-escaped.
+	call(t, cs, "get_decision", map[string]any{"id": "../status"}, true)
+	if r := f.last(t); r.Path != "/api/decisions/..%2Fstatus" {
+		t.Fatalf("id not escaped: %s", r.Path)
 	}
 }
 
@@ -284,7 +308,7 @@ func TestChooseOption(t *testing.T) {
 func TestTasks(t *testing.T) {
 	cs, f := connect(t, tok)
 	out := call(t, cs, "list_tasks", nil, false)
-	if r := f.last(t); r.Method != "GET" || r.Path != "/tasks" || r.Auth != "Bearer "+tok {
+	if r := f.last(t); r.Method != "GET" || r.Path != "/api/tasks" || r.Auth != "Bearer "+tok {
 		t.Fatalf("request: %+v", r)
 	}
 	var got struct {
@@ -306,11 +330,12 @@ func TestTasks(t *testing.T) {
 	}
 
 	out = call(t, cs, "get_task", map[string]any{"id": "T-1"}, false)
-	if r := f.last(t); r.Path != "/tasks/T-1" || r.Auth != "Bearer "+tok {
+	if r := f.last(t); r.Path != "/api/tasks/T-1" || r.Auth != "Bearer "+tok {
 		t.Fatalf("request: %+v", r)
 	}
-	if !strings.Contains(out, "Plan the post") {
-		t.Fatalf("out: %s", out)
+	var task map[string]any
+	if err := json.Unmarshal([]byte(out), &task); err != nil || task["id"] != "T-1" || task["title"] != "Plan the post" {
+		t.Fatalf("get_task shows the task itself: %s", out)
 	}
 	if out = call(t, cs, "get_task", map[string]any{"id": "T-404"}, true); !strings.Contains(out, "HTTP 404") {
 		t.Fatalf("out: %s", out)
@@ -318,16 +343,23 @@ func TestTasks(t *testing.T) {
 
 	f.set(func() { f.tasksRaw = `{"not":"a list"}` })
 	call(t, cs, "list_tasks", nil, true)
+	f.set(func() { f.tasksRaw = `[]` }) // the shape of the internal GET /tasks
+	call(t, cs, "list_tasks", nil, true)
+	f.set(func() { f.tasksRaw = `{"tasks":[]}` })
+	if out = call(t, cs, "list_tasks", nil, false); !strings.Contains(out, `"total": 0`) {
+		t.Fatalf("empty board: %s", out)
+	}
 }
 
 func TestQuest(t *testing.T) {
 	cs, f := connect(t, tok)
 	out := call(t, cs, "get_quest", nil, false)
-	if r := f.last(t); r.Method != "GET" || r.Path != "/goal" || r.Auth != "Bearer "+tok {
+	if r := f.last(t); r.Method != "GET" || r.Path != "/api/quest" || r.Auth != "Bearer "+tok {
 		t.Fatalf("request: %+v", r)
 	}
-	if !strings.Contains(out, "First 10 customers") {
-		t.Fatalf("out: %s", out)
+	var q map[string]any
+	if err := json.Unmarshal([]byte(out), &q); err != nil || q["title"] != "First 10 customers" {
+		t.Fatalf("get_quest shows the quest itself: %s", out)
 	}
 	f.set(func() { f.noQuest = true })
 	if out = call(t, cs, "get_quest", nil, true); !strings.Contains(out, "no quest yet") {
@@ -337,8 +369,12 @@ func TestQuest(t *testing.T) {
 
 func TestWrongToken(t *testing.T) {
 	cs, _ := connect(t, "not-the-owner")
-	for _, name := range []string{"tavern_status", "list_decisions", "list_tasks", "get_quest"} {
-		out := call(t, cs, name, nil, true)
+	for _, name := range []string{"tavern_status", "list_decisions", "list_tasks", "get_quest", "get_task", "get_decision"} {
+		args := map[string]any{}
+		if name == "get_task" || name == "get_decision" {
+			args["id"] = "x-1"
+		}
+		out := call(t, cs, name, args, true)
 		if !strings.Contains(out, "HTTP 401") || !strings.Contains(out, "owner token") || strings.Contains(out, "not-the-owner") {
 			t.Fatalf("%s: %s", name, out)
 		}
@@ -359,10 +395,10 @@ func TestResources(t *testing.T) {
 	for uri, path := range map[string]string{
 		"tavern://status":        "/api/status",
 		"tavern://decisions":     "/api/decisions",
-		"tavern://tasks":         "/tasks",
-		"tavern://quest":         "/goal",
-		"tavern://decisions/d-1": "/api/decisions",
-		"tavern://tasks/T-1":     "/tasks/T-1",
+		"tavern://tasks":         "/api/tasks",
+		"tavern://quest":         "/api/quest",
+		"tavern://decisions/d-1": "/api/decisions/d-1",
+		"tavern://tasks/T-1":     "/api/tasks/T-1",
 	} {
 		res, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
 		if err != nil {
@@ -378,6 +414,31 @@ func TestResources(t *testing.T) {
 	for _, uri := range []string{"tavern://decisions/d-404", "tavern://tasks/T-404"} {
 		if _, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: uri}); err == nil {
 			t.Fatalf("%s: want not found", uri)
+		}
+	}
+}
+
+// TestOnlyAPIRoutes: every call the server makes is under /api/* with the
+// owner token, so a proxy that exposes only /api/* serves all of it.
+func TestOnlyAPIRoutes(t *testing.T) {
+	cs, f := connect(t, tok)
+	call(t, cs, "send_order", map[string]any{"agent": "innkeeper", "text": "hi"}, false)
+	for _, name := range []string{"tavern_status", "list_decisions", "list_tasks", "get_quest"} {
+		call(t, cs, name, nil, false)
+	}
+	call(t, cs, "get_task", map[string]any{"id": "T-1"}, false)
+	call(t, cs, "get_decision", map[string]any{"id": "d-1"}, false)
+	call(t, cs, "choose_option", map[string]any{"id": "d-1", "option": "Publish Friday"}, false)
+	for _, uri := range []string{"tavern://status", "tavern://decisions", "tavern://tasks", "tavern://quest", "tavern://decisions/d-1", "tavern://tasks/T-1"} {
+		if _, err := cs.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: uri}); err != nil {
+			t.Fatalf("%s: %v", uri, err)
+		}
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, r := range f.reqs {
+		if !strings.HasPrefix(r.Path, "/api/") || r.Auth != "Bearer "+tok {
+			t.Errorf("call outside /api/* or without the owner token: %+v", r)
 		}
 	}
 }

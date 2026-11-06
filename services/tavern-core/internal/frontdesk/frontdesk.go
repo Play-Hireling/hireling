@@ -16,7 +16,11 @@
 //	GET  /api/status                      every hireling's last turn, open decisions, conversations
 //	POST /api/command                     {agent, text} — an order for a hireling
 //	GET  /api/decisions                   open decisions
+//	GET  /api/decisions/{id}              one decision, open or answered (chosen set)
 //	POST /api/decisions/{id}/choose       {option} — the answer goes back as a command
+//
+// tavern-core mounts the owner's read-only task board and quest next to these
+// (GET /api/tasks, /api/tasks/{id}, /api/quest), guarded by IsOwner.
 //
 // State lives in memory and, when a Persister is set, is written after every
 // change (one JSON document; tavern-core runs as a single instance per tavern).
@@ -247,6 +251,11 @@ func (d *Desk) anyHireling(r *http.Request) bool {
 
 func (d *Desk) owner(r *http.Request) bool { return same(bearer(r), d.OwnerToken) }
 
+// IsOwner reports whether r carries the owner token (constant-time compare;
+// false when OwnerToken is empty). tavern-core uses it to guard the owner's
+// routes it serves outside this package.
+func (d *Desk) IsOwner(r *http.Request) bool { return d.owner(r) }
+
 // Register adds the desk's routes to mux.
 func (d *Desk) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/turn", d.turn)
@@ -257,6 +266,7 @@ func (d *Desk) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/interaction/{id}/reply", d.reply)
 	mux.HandleFunc("POST /api/decisions", d.newDecision)
 	mux.HandleFunc("GET /api/decisions", d.decisions)
+	mux.HandleFunc("GET /api/decisions/{id}", d.decision)
 	mux.HandleFunc("POST /api/decisions/{id}/choose", d.choose)
 	mux.HandleFunc("POST /api/command", d.order)
 	mux.HandleFunc("GET /api/status", d.status)
@@ -526,6 +536,25 @@ func (d *Desk) decisions(w http.ResponseWriter, r *http.Request) {
 	out := d.openDecisions()
 	d.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]any{"decisions": out})
+}
+
+// decision is GET /api/decisions/{id}: one decision, open or already answered
+// (the desk keeps the last 200; an older one is 404).
+func (d *Desk) decision(w http.ResponseWriter, r *http.Request) {
+	if !d.owner(r) {
+		errJSON(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	id := r.PathValue("id")
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, x := range d.st.Decisions {
+		if x.ID == id {
+			writeJSON(w, http.StatusOK, map[string]any{"decision": x})
+			return
+		}
+	}
+	errJSON(w, http.StatusNotFound, "no such decision")
 }
 
 // ChoiceText is the command text a hireling receives when the owner answers;

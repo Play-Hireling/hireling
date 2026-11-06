@@ -20,11 +20,11 @@ func TestFromEnv(t *testing.T) {
 		url     string
 		wantErr string
 	}{
-		{"defaults", map[string]string{"FRONTDESK_TOKEN": tok}, DefaultURL, ""},
-		{"fallbacks", map[string]string{"TAVERN_URL": "http://localhost:9000/", "FRONTDESK_OWNER_TOKEN": tok}, "http://localhost:9000", ""},
+		{"defaults", map[string]string{"FRONTDESK_OWNER_TOKEN": tok}, DefaultURL, ""},
+		{"fallbacks", map[string]string{"TAVERN_URL": "http://localhost:9000/", "FRONTDESK_TOKEN": tok}, "http://localhost:9000", ""},
 		{"frontdesk wins", map[string]string{"FRONTDESK_URL": "https://t.example.com", "TAVERN_URL": "http://127.0.0.1:1", "FRONTDESK_TOKEN": tok}, "https://t.example.com", ""},
 		{"ipv6 loopback", map[string]string{"FRONTDESK_URL": "http://[::1]:8080", "FRONTDESK_TOKEN": tok}, "http://[::1]:8080", ""},
-		{"no token", map[string]string{}, "", "FRONTDESK_TOKEN is not set"},
+		{"no token", map[string]string{}, "", "FRONTDESK_OWNER_TOKEN is not set"},
 		{"http remote", map[string]string{"FRONTDESK_URL": "http://10.0.0.5:8080", "FRONTDESK_TOKEN": tok}, "", "plain http"},
 		{"http remote allowed", map[string]string{"FRONTDESK_URL": "http://tavern-core:8080", "FRONTDESK_TOKEN": tok, "FRONTDESK_ALLOW_HTTP": "1"}, "http://tavern-core:8080", ""},
 		{"credentials in url", map[string]string{"FRONTDESK_URL": "https://u:p@t.example.com", "FRONTDESK_TOKEN": tok}, "", "must not carry credentials"},
@@ -50,6 +50,18 @@ func TestFromEnv(t *testing.T) {
 				t.Fatalf("cfg = %+v", cfg)
 			}
 		})
+	}
+}
+
+// FRONTDESK_OWNER_TOKEN is the name; FRONTDESK_TOKEN only fills in when it is unset.
+func TestOwnerTokenWins(t *testing.T) {
+	cfg, err := FromEnv(env(map[string]string{"FRONTDESK_OWNER_TOKEN": tok, "FRONTDESK_TOKEN": "fallback-token-value"}))
+	if err != nil || cfg.Token != tok {
+		t.Fatalf("cfg = %+v, err = %v", cfg, err)
+	}
+	cfg, err = FromEnv(env(map[string]string{"FRONTDESK_OWNER_TOKEN": "  ", "FRONTDESK_TOKEN": tok}))
+	if err != nil || cfg.Token != tok {
+		t.Fatalf("blank owner token must fall back: cfg = %+v, err = %v", cfg, err)
 	}
 }
 

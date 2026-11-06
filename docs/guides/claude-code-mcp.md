@@ -25,7 +25,7 @@ From the repository root (where your `.env` is):
 ```bash
 claude mcp add tavern \
   -e FRONTDESK_URL=http://127.0.0.1:8080 \
-  -e FRONTDESK_TOKEN="$(sed -n 's/^FRONTDESK_OWNER_TOKEN=//p' .env)" \
+  -e FRONTDESK_OWNER_TOKEN="$(sed -n 's/^FRONTDESK_OWNER_TOKEN=//p' .env)" \
   -- "$(go env GOPATH)/bin/tavern-mcp"
 ```
 
@@ -33,7 +33,7 @@ Windows (PowerShell):
 
 ```powershell
 $token = (Select-String -Path .env -Pattern '^FRONTDESK_OWNER_TOKEN=(.*)').Matches[0].Groups[1].Value
-claude mcp add tavern -e FRONTDESK_URL=http://127.0.0.1:8080 -e "FRONTDESK_TOKEN=$token" -- "$(go env GOPATH)\bin\tavern-mcp.exe"
+claude mcp add tavern -e FRONTDESK_URL=http://127.0.0.1:8080 -e "FRONTDESK_OWNER_TOKEN=$token" -- "$(go env GOPATH)\bin\tavern-mcp.exe"
 ```
 
 Check it:
@@ -41,7 +41,7 @@ Check it:
 ```console
 $ claude mcp list
 tavern: /home/you/go/bin/tavern-mcp  - ✓ Connected
-$ FRONTDESK_TOKEN=… tavern-mcp -check
+$ FRONTDESK_OWNER_TOKEN=… tavern-mcp -check
 ok: http://127.0.0.1:8080 answers with the owner token; party [dev innkeeper scriptwriter]; 0 open decision(s)
 ```
 
@@ -52,7 +52,7 @@ The default scope (`local`) keeps the token in your own `~/.claude.json`, for th
   "mcpServers": {
     "tavern": {
       "command": "tavern-mcp",
-      "env": { "FRONTDESK_URL": "http://127.0.0.1:8080", "FRONTDESK_TOKEN": "${FRONTDESK_OWNER_TOKEN}" }
+      "env": { "FRONTDESK_URL": "http://127.0.0.1:8080", "FRONTDESK_OWNER_TOKEN": "${FRONTDESK_OWNER_TOKEN}" }
     }
   }
 }
@@ -81,13 +81,13 @@ Claude Code calls `send_order` (`POST /api/command`) and `tavern_status` (`GET /
 | `send_order` | Queue an order for a hireling (`agent`, `text` ≤ 4 000 characters) | `POST /api/command` |
 | `tavern_status` | The party: each hireling's turn, pending orders and last answer; open decisions; conversations | `GET /api/status` |
 | `list_decisions` | Decisions waiting on you | `GET /api/decisions` |
-| `get_decision` | One open decision by id | `GET /api/decisions` |
+| `get_decision` | One decision by id, open or already answered (`chosen` set) | `GET /api/decisions/{id}` |
 | `choose_option` | **Owner action**: answer a decision (`id`, `option`). Final | `POST /api/decisions/{id}/choose` |
-| `list_tasks` | The task board, newest first; filters `owner`, `status`, `limit` | `GET /tasks` |
-| `get_task` | One task with its history | `GET /tasks/{id}` |
-| `get_quest` | The shared quest and its progress bar | `GET /goal` |
+| `list_tasks` | The task board, newest first; filters `owner`, `status`, `limit` | `GET /api/tasks` |
+| `get_task` | One task with its history | `GET /api/tasks/{id}` |
+| `get_quest` | The shared quest and its progress bar | `GET /api/quest` |
 
-Every tool except `send_order` and `choose_option` is read-only, and marked so.
+Every tool except `send_order` and `choose_option` is read-only, and marked so. Every call is under `/api/*` with the owner token; the server never uses tavern-core's internal, unauthenticated routes.
 
 ## Resources
 
@@ -120,11 +120,11 @@ The tavern's own limits still apply: whatever an order says, a hireling cannot r
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `FRONTDESK_URL` | `TAVERN_URL`, else `http://127.0.0.1:8080` | Your tavern-core (`TAVERN_PORT` if you changed it) |
-| `FRONTDESK_TOKEN` | `FRONTDESK_OWNER_TOKEN` | **Required.** The owner token from the box's `.env` |
+| `FRONTDESK_OWNER_TOKEN` | `FRONTDESK_TOKEN` | **Required.** The owner token from the box's `.env`. `FRONTDESK_TOKEN` is read only when it is unset (not to be confused with a hireling's `FRONTDESK_TOKEN_<ID>`) |
 | `FRONTDESK_ALLOW_HTTP` | — | `1` allows `http://` to a non-loopback host |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | — | When the tavern sits behind Cloudflare Access |
 
-A remote tavern: `FRONTDESK_URL=https://tavern.example.com`. `list_tasks`, `get_task` and `get_quest` read `/tasks` and `/goal`, outside `/api/*`; behind a proxy that exposes only `/api/*`, use an SSH tunnel for those.
+A remote tavern: `FRONTDESK_URL=https://tavern.example.com`, behind TLS and a proxy that exposes only `/api/*` — every tool works through it.
 
 ## Other MCP clients
 
@@ -132,14 +132,15 @@ Any client that launches stdio servers works. The usual JSON:
 
 ```json
 { "mcpServers": { "tavern": { "command": "/path/to/tavern-mcp",
-  "env": { "FRONTDESK_URL": "http://127.0.0.1:8080", "FRONTDESK_TOKEN": "<owner token>" } } } }
+  "env": { "FRONTDESK_URL": "http://127.0.0.1:8080", "FRONTDESK_OWNER_TOKEN": "<owner token>" } } } }
 ```
 
 ## Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
-| `HTTP 401 … must be the tavern's owner token` | `FRONTDESK_TOKEN` is a hireling token or stale; copy `FRONTDESK_OWNER_TOKEN` from `.env` again |
+| `HTTP 401 … must be the tavern's owner token` | The token is a hireling's or stale; copy `FRONTDESK_OWNER_TOKEN` from `.env` again (and unset an old `FRONTDESK_TOKEN`) |
+| `HTTP 404` from `list_tasks` or `get_quest` on every call | The tavern-core is older than `/api/tasks` and `/api/quest`: rebuild the box (`docker compose up -d --build`) |
 | `cannot reach the tavern at …: connection refused` | The box is down or on another port: `docker compose ps`, `TAVERN_PORT` |
 | `claude mcp list` shows *Failed to connect* | Run `tavern-mcp -check` with the same env to see the error |
 | A connection timeout on a busy machine | Raise Claude Code's MCP start-up timeout: `MCP_TIMEOUT=60000 claude` |
