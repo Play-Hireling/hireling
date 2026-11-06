@@ -76,12 +76,20 @@ type Server struct {
 	Owner func(*http.Request) bool
 }
 
-// Approver proves that the owner answered a decision (D1/D3) and returns the
-// option chosen. The Front Desk implements it: deskID must have opened the
-// decision and the owner must have answered it. An unknown, open or foreign
-// decision is ErrNotApproved.
+// Approver ties a gate card to the owner's decision and proves the answer
+// (D1/D3). The Front Desk implements it.
+//   - Bind attaches the card's actions to an open decision deskID opened,
+//     once, before the owner answers; it states on the decision what a yes
+//     grants and returns the option that grants.
+//   - Confirm returns the option the owner chose and the one that grants,
+//     once the decision is answered.
+//
+// An unknown, open or foreign decision, or one without a card, is
+// ErrNotApproved; a card for an answered decision is ErrDecided, a second
+// card ErrBound.
 type Approver interface {
-	Confirm(ctx context.Context, decision, agent, deskID string) (chosen string, err error)
+	Bind(ctx context.Context, decision, agent, deskID string, actions []string) (approve string, err error)
+	Confirm(ctx context.Context, decision, agent, deskID string) (chosen, approve string, err error)
 }
 
 // ErrNotApproved is what an Approver returns (wrapped) when the decision is
@@ -498,6 +506,36 @@ func (s *Server) pending(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "grants are off"})
 		return
 	}
+	if s.Approvals == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": ErrApprovalsOff.Error()})
+		return
+	}
+	prof := s.Gate.Profile(p.Agent)
+	if prof == nil {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "unknown hireling: " + p.Agent})
+		return
+	}
+	// The card is tied to the decision now, while it is open: an answered
+	// decision takes no new card (an old yes is not reused), a decision takes
+	// one card (its actions are not swapped while the owner reads it), and the
+	// option that grants comes from the decision, not from the hireling.
+	names := make([]string, 0, len(p.Actions))
+	for _, a := range p.Actions {
+		names = append(names, a.Action)
+	}
+	approve, err := s.Approvals.Bind(r.Context(), p.Decision, p.Agent, prof.DeskID, names)
+	if err != nil {
+		code := http.StatusServiceUnavailable
+		switch {
+		case errors.Is(err, ErrNotApproved):
+			code = http.StatusForbidden
+		case errors.Is(err, frontdesk.ErrDecided), errors.Is(err, frontdesk.ErrBound):
+			code = http.StatusConflict
+		}
+		writeJSON(w, code, map[string]string{"error": err.Error()})
+		return
+	}
+	p.Approve = approve
 	if err := s.Grants.Pend(r.Context(), p); err != nil {
 		fail(w, err)
 		return
@@ -530,9 +568,11 @@ func (s *Server) answer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The body proves nothing: a hireling can reach tavern-core, but only the
-	// owner token can answer on the Front Desk. The grant uses the answer the
-	// desk recorded, never the choice in the body.
-	chosen, err := s.Approvals.Confirm(r.Context(), in.Decision, agent, p.DeskID)
+	// owner token can answer on the Front Desk. The grant follows the answer
+	// the desk recorded, never the choice in the body: only the option that
+	// grants (the decision's first) is a yes; any other answer uses up the
+	// card and grants nothing.
+	chosen, approve, err := s.Approvals.Confirm(r.Context(), in.Decision, agent, p.DeskID)
 	if err != nil {
 		code := http.StatusServiceUnavailable
 		if errors.Is(err, ErrNotApproved) {
@@ -543,7 +583,11 @@ func (s *Server) answer(w http.ResponseWriter, r *http.Request) {
 	}
 	granted := []policy.Act{}
 	if s.Grants != nil {
-		acts, err := policy.AnswerFor(r.Context(), s.Grants, in.Decision, agent, chosen)
+		yes := ""
+		if strings.EqualFold(strings.TrimSpace(chosen), strings.TrimSpace(approve)) {
+			yes = approve
+		}
+		acts, err := policy.AnswerFor(r.Context(), s.Grants, in.Decision, agent, yes)
 		if errors.Is(err, policy.ErrOtherAgent) {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 			return

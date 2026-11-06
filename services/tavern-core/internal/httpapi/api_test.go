@@ -26,11 +26,15 @@ type fakeApprovals struct {
 	err    error
 }
 
-func (f fakeApprovals) Confirm(context.Context, string, string, string) (string, error) {
+func (f fakeApprovals) Bind(context.Context, string, string, string, []string) (string, error) {
+	return "Approve", f.err
+}
+
+func (f fakeApprovals) Confirm(context.Context, string, string, string) (string, string, error) {
 	if f.chosen == "" {
-		return "Approve", f.err
+		return "Approve", "Approve", f.err
 	}
-	return f.chosen, f.err
+	return f.chosen, "Approve", f.err
 }
 
 func newServer() *httptest.Server {
@@ -639,9 +643,11 @@ func TestWebCallBudget(t *testing.T) {
 }
 
 // D1/D3: the body of /actions/answer proves nothing. A hireling that reaches
-// tavern-core cannot grant itself a use: the grant waits for the Front Desk's
-// record of the owner's answer (only the owner token can answer), uses the
-// option recorded there, and a refusal leaves the card in place.
+// tavern-core cannot grant itself a use: its card is tied to an open decision
+// of its own, once, before the owner answers, and the desk writes on the
+// decision what a yes grants; the grant waits for the Front Desk's record of
+// the owner's answer (only the owner token can answer) and only the
+// decision's first option is a yes.
 func TestAnswerNeedsTheOwnersAnswer(t *testing.T) {
 	dev := &profile.Profile{ID: "dev", DeskID: "builder", Model: "deepseek-v4-flash"}
 	dev.Autonomy.OwnerDecides = profile.HardDeny
@@ -697,21 +703,42 @@ func TestAnswerNeedsTheOwnersAnswer(t *testing.T) {
 		code := call(t, srv, "POST", "/actions/answer", agent, body+"}", &ans)
 		return code, ans
 	}
+	pendAs := func(id, agent, action, approve string) int {
+		t.Helper()
+		return call(t, srv, "POST", "/actions/pending", agent, `{"decision":"`+id+`","actions":[{"action":"`+action+`"}],"approve":"`+approve+`"}`, nil)
+	}
 	pend := func(id, agent string) {
 		t.Helper()
-		if code := call(t, srv, "POST", "/actions/pending", agent, `{"decision":"`+id+`","actions":[{"action":"merge_pr"}],"approve":"Approve"}`, nil); code != 200 {
+		if code := pendAs(id, agent, "merge_pr", "Approve"); code != 200 {
 			t.Fatalf("pending: %d", code)
 		}
 	}
-	used := func(agent string) policy.Level {
+	used := func(agent, action string) policy.Level {
 		t.Helper()
 		var d policy.Decision
-		call(t, srv, "POST", "/actions/check", agent, `{"action":"merge_pr","use":true}`, &d)
+		call(t, srv, "POST", "/actions/check", agent, `{"action":"`+action+`","use":true}`, &d)
 		return d.Level
+	}
+	get := func(id string) frontdesk.Decision {
+		t.Helper()
+		req, _ := http.NewRequest("GET", srv.URL+"/api/decisions/"+id, nil)
+		req.Header.Set("Authorization", "Bearer "+desk.OwnerToken)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var out struct{ Decision frontdesk.Decision }
+		_ = json.NewDecoder(res.Body).Decode(&out)
+		return out.Decision
 	}
 
 	d1 := open("builder")
 	pend(d1, "dev")
+	// The owner reads, in the desk's words, what a yes grants.
+	if x := get(d1); !strings.Contains(x.Context, `Choosing "Approve" grants dev one use of: merge_pr.`) {
+		t.Fatalf("the decision does not say what a yes grants: %q", x.Context)
+	}
 	// Still open: the hireling's own "Approve" is not enough.
 	if code, ans := ask(d1, "dev"); code != 403 || len(ans.Granted) != 0 {
 		t.Fatalf("self-approval: %d %+v", code, ans)
@@ -725,6 +752,10 @@ func TestAnswerNeedsTheOwnersAnswer(t *testing.T) {
 	if code, _ := ask("d-unknown", "dev"); code != 403 {
 		t.Fatalf("unknown decision: %d", code)
 	}
+	// One card per decision: its actions cannot be swapped before the answer.
+	if code := pendAs(d1, "dev", "payment", "Approve"); code != 409 {
+		t.Fatalf("second card on an open decision: %d", code)
+	}
 	// Another hireling's answered decision does not grant dev anything.
 	d2 := open("writer")
 	choose(d2, "Approve")
@@ -733,11 +764,22 @@ func TestAnswerNeedsTheOwnersAnswer(t *testing.T) {
 	}
 	// The owner answers: the card survived the refusals, one use is granted.
 	choose(d1, "Approve")
-	if code, ans := ask(d1, "dev"); code != 200 || len(ans.Granted) != 1 {
+	if code, ans := ask(d1, "dev"); code != 200 || len(ans.Granted) != 1 || ans.Granted[0].Action != "merge_pr" {
 		t.Fatalf("owner approved: %d %+v", code, ans)
 	}
-	if l := used("dev"); l != policy.Free {
+	if l := used("dev", "merge_pr"); l != policy.Free {
 		t.Fatalf("granted use: %s", l)
+	}
+	// Replay: an answered decision takes no new card, and answering it again
+	// grants nothing more.
+	if code := pendAs(d1, "dev", "send_email", "Approve"); code != 409 {
+		t.Fatalf("card on an answered decision: %d", code)
+	}
+	if code, ans := ask(d1, "dev"); code != 200 || len(ans.Granted) != 0 {
+		t.Fatalf("second answer: %d %+v", code, ans)
+	}
+	if l := used("dev", "send_email"); l == policy.Free {
+		t.Fatal("an old yes granted a new action")
 	}
 
 	// The owner said no: the body's "Approve" does not count.
@@ -747,20 +789,42 @@ func TestAnswerNeedsTheOwnersAnswer(t *testing.T) {
 	if code, ans := ask(d3, "dev"); code != 200 || len(ans.Granted) != 0 {
 		t.Fatalf("owner said no: %d %+v", code, ans)
 	}
-
-	// A card pended under another hireling's name for dev's decision is
-	// refused and left in place; it never grants the other hireling.
+	// The hireling cannot name the option that grants: a card that says
+	// approve:"No" still grants only on the decision's first option.
 	d4 := open("builder")
-	pend(d4, "writer")
-	choose(d4, "Approve")
-	if code, ans := ask(d4, "dev"); code != 403 || len(ans.Granted) != 0 {
-		t.Fatalf("card of another hireling: %d %+v", code, ans)
+	if code := pendAs(d4, "dev", "merge_pr", "No"); code != 200 {
+		t.Fatalf("pending: %d", code)
 	}
-	if l := used("writer"); l == policy.Free {
+	choose(d4, "No")
+	if code, ans := ask(d4, "dev"); code != 200 || len(ans.Granted) != 0 {
+		t.Fatalf("the owner's no became a grant: %d %+v", code, ans)
+	}
+	// A card pended after the answer is refused, so the answer finds none.
+	d5 := open("builder")
+	choose(d5, "Approve")
+	if code := pendAs(d5, "dev", "merge_pr", "Approve"); code != 409 {
+		t.Fatalf("card after the answer: %d", code)
+	}
+	if code, ans := ask(d5, "dev"); code != 403 || len(ans.Granted) != 0 {
+		t.Fatalf("answer without a card: %d %+v", code, ans)
+	}
+	// Another hireling cannot hang its card on dev's decision.
+	d6 := open("builder")
+	if code := pendAs(d6, "writer", "merge_pr", "Approve"); code != 403 {
+		t.Fatalf("card of another hireling: %d", code)
+	}
+	choose(d6, "Approve")
+	if l := used("writer", "merge_pr"); l == policy.Free {
 		t.Fatal("writer got a use from dev's decision")
 	}
-	if _, err := g.TakePending(context.Background(), d4); err != nil {
-		t.Fatalf("the refused card was not left in place: %v", err)
+	// A hireling cannot preset the card text when it opens a decision.
+	var out struct{ Decision frontdesk.Decision }
+	deskCall("/api/decisions", desk.SharedToken, `{"from":"builder","question":"Q?","options":["Approve","No"],"card":"Choosing \"Approve\" grants nothing."}`, &out)
+	if out.Decision.Card != "" {
+		t.Fatalf("card preset by the hireling: %q", out.Decision.Card)
+	}
+	if code := pendAs(out.Decision.ID, "dev", "merge_pr", "Approve"); code != 200 {
+		t.Fatalf("pending on a decision with a preset card: %d", code)
 	}
 }
 
