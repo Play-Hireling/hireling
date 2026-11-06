@@ -18,9 +18,13 @@ var (
 	// ErrBound means the decision already carries a card: its actions cannot
 	// be swapped while the owner reads it.
 	ErrBound = errors.New("frontdesk: the decision already carries a card")
+	// ErrCardTooLong means the card's line would not fit whole: a cut line
+	// could hide an action that a yes grants, so the card is refused.
+	ErrCardTooLong = errors.New("frontdesk: the card names more than the decision can show")
 )
 
-// maxCard bounds the line tavern-core adds to a decision's context.
+// maxCard bounds the line tavern-core adds to a decision's context. The line
+// is never cut: a card that does not fit is refused.
 const maxCard = 400
 
 // Bind attaches a gate card to decisionID before the owner answers it (D1).
@@ -50,8 +54,14 @@ func (d *Desk) Bind(ctx context.Context, decisionID, agent, deskID string, actio
 		case len(x.Options) == 0:
 			return "", fmt.Errorf("%w: decision %s offers no option", ErrNotApproved, x.ID)
 		}
-		x.Card = cut(fmt.Sprintf("Choosing %q grants %s one use of: %s.", x.Options[0], agent, strings.Join(actions, ", ")), maxCard)
-		x.Context = strings.TrimSpace(x.Context + "\n\n" + x.Card)
+		card := fmt.Sprintf("Choosing %q grants %s one use of: %s.", x.Options[0], agent, strings.Join(actions, ", "))
+		if n := len([]rune(card)); n > maxCard {
+			return "", fmt.Errorf("%w: %d actions, %d characters (at most %d)", ErrCardTooLong, len(actions), n, maxCard)
+		}
+		// The desk's line goes first, so a line the hireling wrote in its own
+		// context cannot come after it and read as the last word.
+		x.Card = card
+		x.Context = strings.TrimSpace(x.Card + "\n\n" + x.Context)
 		d.save(ctx)
 		return x.Options[0], nil
 	}

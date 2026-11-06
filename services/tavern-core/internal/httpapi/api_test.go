@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -817,6 +818,31 @@ func TestAnswerNeedsTheOwnersAnswer(t *testing.T) {
 	if l := used("writer", "merge_pr"); l == policy.Free {
 		t.Fatal("writer got a use from dev's decision")
 	}
+	// A card whose line would be cut is refused: the line the owner reads
+	// names every action a yes grants, or there is no card.
+	d7 := open("builder")
+	many := make([]string, 0, 41)
+	for i := 0; i < 40; i++ {
+		many = append(many, fmt.Sprintf(`{"action":"read_docs_%02d"}`, i))
+	}
+	many = append(many, `{"action":"payment"}`)
+	if code := call(t, srv, "POST", "/actions/pending", "dev", `{"decision":"`+d7+`","actions":[`+strings.Join(many, ",")+`],"approve":"Approve"}`, nil); code != 400 {
+		t.Fatalf("a card longer than the decision can show: %d", code)
+	}
+	choose(d7, "Approve")
+	if code, ans := ask(d7, "dev"); code != 403 || len(ans.Granted) != 0 {
+		t.Fatalf("a refused card granted: %d %+v", code, ans)
+	}
+	if l := used("dev", "payment"); l == policy.Free {
+		t.Fatal("payment became free through a cut card")
+	}
+	// The desk's line comes first in the context the owner reads.
+	d8 := open("builder")
+	pend(d8, "dev")
+	if x := get(d8); !strings.HasPrefix(x.Context, `Choosing "Approve" grants dev one use of: merge_pr.`) {
+		t.Fatalf("the desk's line is not first: %q", x.Context)
+	}
+
 	// A hireling cannot preset the card text when it opens a decision.
 	var out struct{ Decision frontdesk.Decision }
 	deskCall("/api/decisions", desk.SharedToken, `{"from":"builder","question":"Q?","options":["Approve","No"],"card":"Choosing \"Approve\" grants nothing."}`, &out)

@@ -531,6 +531,8 @@ func (s *Server) pending(w http.ResponseWriter, r *http.Request) {
 			code = http.StatusForbidden
 		case errors.Is(err, frontdesk.ErrDecided), errors.Is(err, frontdesk.ErrBound):
 			code = http.StatusConflict
+		case errors.Is(err, frontdesk.ErrCardTooLong):
+			code = http.StatusBadRequest
 		}
 		writeJSON(w, code, map[string]string{"error": err.Error()})
 		return
