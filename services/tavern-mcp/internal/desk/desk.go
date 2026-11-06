@@ -22,6 +22,9 @@ import (
 	"time"
 )
 
+// MinToken is the shortest owner token tavern-core accepts (frontdesk.MinOwnerToken).
+const MinToken = 32
+
 // DefaultURL is where a box started with compose.yaml publishes tavern-core.
 const DefaultURL = "http://127.0.0.1:8080"
 
@@ -72,6 +75,9 @@ func FromEnv(getenv func(string) string) (Config, error) {
 func (c *Config) Validate() error {
 	if c.Token == "" {
 		return errors.New("FRONTDESK_OWNER_TOKEN is not set: pass the tavern's owner token (FRONTDESK_OWNER_TOKEN in the box's .env)")
+	}
+	if n := len(c.Token); n < MinToken {
+		return fmt.Errorf("FRONTDESK_OWNER_TOKEN has %d characters; an owner token has at least %d (tavern-core refuses a shorter one): copy it from the box's .env", n, MinToken)
 	}
 	u, err := url.Parse(c.URL)
 	if err != nil || u.Host == "" {

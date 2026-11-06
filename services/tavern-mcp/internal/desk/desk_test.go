@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-const tok = "owner-secret-token-123"
+const tok = "owner-secret-token-0123456789abcdef"
 
 func env(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
 
@@ -128,5 +128,13 @@ func TestDoNetworkError(t *testing.T) {
 	}
 	if NotFound(err) {
 		t.Fatal("a network error is not a 404")
+	}
+}
+
+// An owner token shorter than tavern-core accepts is refused here too.
+func TestShortToken(t *testing.T) {
+	_, err := FromEnv(env(map[string]string{"FRONTDESK_OWNER_TOKEN": "abc"}))
+	if err == nil || !strings.Contains(err.Error(), "at least 32") || strings.Contains(err.Error(), "abc") {
+		t.Fatalf("err = %v", err)
 	}
 }

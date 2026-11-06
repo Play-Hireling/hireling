@@ -120,7 +120,7 @@ The tavern's own limits still apply: whatever an order says, a hireling cannot r
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `FRONTDESK_URL` | `TAVERN_URL`, else `http://127.0.0.1:8080` | Your tavern-core (`TAVERN_PORT` if you changed it) |
-| `FRONTDESK_OWNER_TOKEN` | `FRONTDESK_TOKEN` | **Required.** The owner token from the box's `.env`. `FRONTDESK_TOKEN` is read only when it is unset (not to be confused with a hireling's `FRONTDESK_TOKEN_<ID>`) |
+| `FRONTDESK_OWNER_TOKEN` | `FRONTDESK_TOKEN` | **Required.** The owner token from the box's `.env` (at least 32 characters, as tavern-core requires). `FRONTDESK_TOKEN` is read only when it is unset (not to be confused with a hireling's `FRONTDESK_TOKEN_<ID>`) |
 | `FRONTDESK_ALLOW_HTTP` | — | `1` allows `http://` to a non-loopback host |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | — | When the tavern sits behind Cloudflare Access |
 
