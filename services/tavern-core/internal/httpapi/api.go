@@ -19,9 +19,16 @@
 //	POST /tasks/{id}/lease · /renew · /handoff · /finish
 //	POST /tasks/{id}/approve · /deny    B6: the Innkeeper decides a requested handoff
 //
-// Internal network only (Compose); hirelings identify themselves with the
-// X-Hireling header. The Front Desk (/api/*, internal/frontdesk) is mounted on
-// the same server and carries its own bearer tokens.
+// With the owner token (Authorization: Bearer, the Front Desk's owner token):
+//
+//	GET  /api/tasks                   {"tasks": [...]} the task board
+//	GET  /api/tasks/{id}              {"task": {...}} one task with its history
+//	GET  /api/quest                   {"quest": {...}} the shared quest (404 until set)
+//
+// Everything else is internal network only (Compose); hirelings identify
+// themselves with the X-Hireling header. The Front Desk (/api/*,
+// internal/frontdesk) is mounted on the same server and carries its own
+// bearer tokens.
 package httpapi
 
 import (
@@ -29,6 +36,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -57,6 +65,10 @@ type Server struct {
 	Now   func() time.Time // defaults to time.Now
 	// Extra registers more routes on the same mux (the Front Desk).
 	Extra func(*http.ServeMux)
+	// Owner reports whether a request carries the owner token (the Front
+	// Desk's IsOwner). It guards GET /api/tasks, /api/tasks/{id} and
+	// /api/quest; nil = those routes answer 401 to everyone.
+	Owner func(*http.Request) bool
 }
 
 func (s *Server) now() time.Time {
@@ -98,10 +110,39 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /tasks/{id}/unblock", s.unblock)
 	mux.HandleFunc("POST /tasks/{id}/approve", s.approve)
 	mux.HandleFunc("POST /tasks/{id}/deny", s.deny)
+	// The owner's read-only board and quest under /api/*, with the owner token
+	// (the routes above trust the internal network and stay as they are).
+	mux.HandleFunc("GET /api/tasks", s.ownerOnly(s.ownerTasks))
+	mux.HandleFunc("GET /api/tasks/{id}", s.ownerOnly(s.ownerTask))
+	mux.HandleFunc("GET /api/quest", s.ownerOnly(s.ownerQuest))
 	if s.Extra != nil {
 		s.Extra(mux)
 	}
-	return mux
+	return jsonOnly(mux)
+}
+
+// jsonOnly refuses a write to the internal routes (everything outside /api/*)
+// whose body is not declared JSON: 415. A web page the owner opens can reach
+// 127.0.0.1 and send a "simple" cross-site POST (text/plain, no preflight);
+// it cannot send application/json without a CORS preflight, which this
+// server never answers. The runtimes, the gate hook and bin/tavern always
+// send application/json. The Front Desk (/api/*) needs a bearer token, which
+// a cross-site request cannot carry either.
+func jsonOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+		default:
+			if !strings.HasPrefix(r.URL.Path, "/api/") {
+				mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+				if err != nil || mt != "application/json" {
+					writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{"error": "Content-Type must be application/json"})
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -654,6 +695,54 @@ func (s *Server) getTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, t)
+}
+
+// ownerOnly answers 401 unless the request carries the owner token.
+func (s *Server) ownerOnly(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.Owner == nil || !s.Owner(r) {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			return
+		}
+		next(w, r)
+	}
+}
+
+// ownerTasks is GET /api/tasks: the board, as GET /tasks, in an object.
+func (s *Server) ownerTasks(w http.ResponseWriter, r *http.Request) {
+	ts, err := s.Tasks.List(r.Context())
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if ts == nil {
+		ts = []*tasks.Task{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tasks": ts})
+}
+
+// ownerTask is GET /api/tasks/{id}.
+func (s *Server) ownerTask(w http.ResponseWriter, r *http.Request) {
+	t, err := s.Tasks.Get(r.Context(), r.PathValue("id"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"task": t})
+}
+
+// ownerQuest is GET /api/quest: the quest as GET /goal shows it.
+func (s *Server) ownerQuest(w http.ResponseWriter, r *http.Request) {
+	if s.Goal == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "quest not enabled"})
+		return
+	}
+	g, err := s.Goal.Get(r.Context())
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"quest": s.quest(r.Context(), g)})
 }
 
 // queue is GET /agents/{id}/queue (B3): the agent's queued tasks in the order

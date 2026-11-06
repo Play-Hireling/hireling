@@ -10,11 +10,11 @@ Any server that implements this contract can stand in for it.
 
 | Token | Variable | May call |
 | --- | --- | --- |
-| Owner | `FRONTDESK_OWNER_TOKEN` | `/api/status`, `/api/command`, `/api/decisions` (GET), `/api/decisions/{id}/choose`, `/api/interactions` (GET) |
+| Owner | `FRONTDESK_OWNER_TOKEN` | `/api/status`, `/api/command`, `/api/decisions` (GET), `/api/decisions/{id}` (GET), `/api/decisions/{id}/choose`, `/api/interactions` (GET), `/api/tasks`, `/api/tasks/{id}`, `/api/quest` |
 | Hireling (own) | `FRONTDESK_TOKEN_<ID>` | Only its own `agent`/`from` |
 | Hireling (shared) | `FRONTDESK_AGENT_TOKEN` | Any hireling of the tavern |
 
-Unknown agents are `401`. Tokens are compared in constant time. Behind a proxy that adds its own auth (e.g. Cloudflare Access), the runtime also sends `CF-Access-Client-Id` / `CF-Access-Client-Secret` when configured.
+Unknown agents are `401`. Tokens are compared in constant time. tavern-core refuses to start when `FRONTDESK_OWNER_TOKEN` is shorter than 32 characters or equal to `FRONTDESK_AGENT_TOKEN` or a hireling's `FRONTDESK_TOKEN_<ID>` (that hireling would be the owner); `./scripts/init-env.sh` writes 48 random hex characters for each. Behind a proxy that adds its own auth (e.g. Cloudflare Access), the runtime also sends `CF-Access-Client-Id` / `CF-Access-Client-Secret` when configured.
 
 ## Owner endpoints
 
@@ -40,11 +40,26 @@ Unknown agents are `401`. Tokens are compared in constant time. Behind a proxy t
 ### `GET /api/decisions` — waiting on you
 → `{"decisions": [{"id": "d-…", "from": "social-media", "question": "…", "options": ["…"], "context": "…", "urgency": "normal", "at": "…"}]}`
 
+### `GET /api/decisions/{id}` — one decision, open or answered
+→ `{"decision": {"id": "d-…", "from": "…", "question": "…", "options": ["…"], "chosen": "…", "at": "…"}}`. `chosen` is set once the owner has answered. `404` for an unknown id (the desk keeps the last 200 decisions).
+
 ### `POST /api/decisions/{id}/choose`
 ```json
 {"option": "Publish Friday 9:00"}
 ```
 Case-insensitive match against the offered options (`400` otherwise, `409` if already decided). Queues a command for the requesting hireling with `decisionId` set and text `Decision: <question> → chosen: <option> (decision <id>)`.
+
+### The task board and the quest (read-only)
+
+tavern-core serves the owner's view of the board and the quest next to the desk, with the owner token. They are the same data as the internal `GET /tasks`, `GET /tasks/{id}` and `GET /goal` ([tavern-core API](tavern-core.md)), wrapped in an object:
+
+| Call | Answer |
+| --- | --- |
+| `GET /api/tasks` | `{"tasks": [ …every task… ]}` |
+| `GET /api/tasks/{id}` | `{"task": {…}}` · `404` unknown |
+| `GET /api/quest` | `{"quest": {"title", "target", "current", "percent", "bar", "kinds", …}}` · `404` until a quest is set |
+
+A hireling token gets `401` here, as on every owner endpoint.
 
 ## Hireling endpoints
 

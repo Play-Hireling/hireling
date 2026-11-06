@@ -4,14 +4,13 @@ What is coming to the open engine, roughly in order. Dates are intentions, not p
 
 ## Now — make the box delightful
 - **Autonomy gate** (D1) on every tool call, **capped limits counted per day or week** (D2) and the **Autonomy Log** (D4) with who, what, why and turn cost; **autonomy first** (D11): an ask about the hireling's own action goes back to it, one card per task.
-- **Tavern MCP server**: orders, status, decisions, tasks and the quest as MCP tools/resources, so MCP clients (Claude Code and others) manage a tavern without the shell.
 - **Streaming answers** to the Front Desk (A13): first words in under a second.
 - **Plain-art game client** in the box: watch the party work at `http://127.0.0.1:8080/` (the official art stays with the hosted game).
 - **Release images** on GitHub Container Registry, multi-arch, signed.
 
 ## Next — limits you can trust
 - **Token budget hard stop** (D7: over budget → only P0/P1).
-- **Authenticated task API** in tavern-core (per-hireling tokens everywhere, not only on the Front Desk).
+- **Authenticated task API** in tavern-core: per-hireling tokens on every route, not only on the Front Desk; a service token for `bin/tavern` and the runtimes; the owner token for the owner's writes that still have none (`POST /tasks`, `POST /actions/answer`, `POST /tasks/{id}/approve|deny` as `owner`, `PUT /goal`); and a second listener on `127.0.0.1` that serves only `/api/*`, apart from the Compose network. The owner's reads are already under `/api/*` (`/api/tasks`, `/api/quest`), and the internal write routes take JSON only (415 otherwise); until the rest lands, the internal routes have no auth and are reachable by any local program ([security](security.md)).
 - **Any OpenAI-compatible provider per hireling** (Anthropic, OpenAI, local models via vLLM/Ollama) with pricing tables.
 
 ## Later — a team that improves itself

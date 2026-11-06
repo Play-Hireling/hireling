@@ -16,7 +16,11 @@
 //	GET  /api/status                      every hireling's last turn, open decisions, conversations
 //	POST /api/command                     {agent, text} — an order for a hireling
 //	GET  /api/decisions                   open decisions
+//	GET  /api/decisions/{id}              one decision, open or answered (chosen set)
 //	POST /api/decisions/{id}/choose       {option} — the answer goes back as a command
+//
+// tavern-core mounts the owner's read-only task board and quest next to these
+// (GET /api/tasks, /api/tasks/{id}, /api/quest), guarded by IsOwner.
 //
 // State lives in memory and, when a Persister is set, is written after every
 // change (one JSON document; tavern-core runs as a single instance per tavern).
@@ -28,6 +32,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -245,7 +250,59 @@ func (d *Desk) anyHireling(r *http.Request) bool {
 	return false
 }
 
-func (d *Desk) owner(r *http.Request) bool { return same(bearer(r), d.OwnerToken) }
+func (d *Desk) owner(r *http.Request) bool {
+	return same(bearer(r), d.OwnerToken) && !d.ownerShared()
+}
+
+// MinOwnerToken is the shortest owner token tavern-core accepts
+// (scripts/init-env.sh writes 48 hex characters).
+const MinOwnerToken = 32
+
+// ownerShared reports whether the owner token is also a hireling's token
+// (the shared one or any hireling's own): then every such hireling would be
+// the owner, so the owner's endpoints stay closed.
+func (d *Desk) ownerShared() bool {
+	if same(d.OwnerToken, d.SharedToken) {
+		return true
+	}
+	for _, t := range d.AgentTokens {
+		if same(d.OwnerToken, t) {
+			return true
+		}
+	}
+	return false
+}
+
+// Check validates the tokens at start. An owner token that is also a
+// hireling's token would let that hireling order the party and answer its
+// own decisions; a short one can be guessed. The errors never carry a token.
+func (d *Desk) Check() error {
+	if d.OwnerToken == "" {
+		return nil
+	}
+	if n := len(d.OwnerToken); n < MinOwnerToken {
+		return fmt.Errorf("FRONTDESK_OWNER_TOKEN has %d characters, at least %d are required (./scripts/init-env.sh writes a random one)", n, MinOwnerToken)
+	}
+	if same(d.OwnerToken, d.SharedToken) {
+		return errors.New("FRONTDESK_OWNER_TOKEN is the same as FRONTDESK_AGENT_TOKEN: every hireling would be the owner; give the owner its own token")
+	}
+	ids := make([]string, 0, len(d.AgentTokens))
+	for id := range d.AgentTokens {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		if same(d.OwnerToken, d.AgentTokens[id]) {
+			return fmt.Errorf("FRONTDESK_OWNER_TOKEN is the same as hireling %s's own token: that hireling would be the owner; give the owner its own token", id)
+		}
+	}
+	return nil
+}
+
+// IsOwner reports whether r carries the owner token (constant-time compare;
+// false when OwnerToken is empty). tavern-core uses it to guard the owner's
+// routes it serves outside this package.
+func (d *Desk) IsOwner(r *http.Request) bool { return d.owner(r) }
 
 // Register adds the desk's routes to mux.
 func (d *Desk) Register(mux *http.ServeMux) {
@@ -257,6 +314,7 @@ func (d *Desk) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/interaction/{id}/reply", d.reply)
 	mux.HandleFunc("POST /api/decisions", d.newDecision)
 	mux.HandleFunc("GET /api/decisions", d.decisions)
+	mux.HandleFunc("GET /api/decisions/{id}", d.decision)
 	mux.HandleFunc("POST /api/decisions/{id}/choose", d.choose)
 	mux.HandleFunc("POST /api/command", d.order)
 	mux.HandleFunc("GET /api/status", d.status)
@@ -526,6 +584,25 @@ func (d *Desk) decisions(w http.ResponseWriter, r *http.Request) {
 	out := d.openDecisions()
 	d.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]any{"decisions": out})
+}
+
+// decision is GET /api/decisions/{id}: one decision, open or already answered
+// (the desk keeps the last 200; an older one is 404).
+func (d *Desk) decision(w http.ResponseWriter, r *http.Request) {
+	if !d.owner(r) {
+		errJSON(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	id := r.PathValue("id")
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, x := range d.st.Decisions {
+		if x.ID == id {
+			writeJSON(w, http.StatusOK, map[string]any{"decision": x})
+			return
+		}
+	}
+	errJSON(w, http.StatusNotFound, "no such decision")
 }
 
 // ChoiceText is the command text a hireling receives when the owner answers;

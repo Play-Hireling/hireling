@@ -1,7 +1,7 @@
-MODULES := runtime services/tavern-core services/egress
+MODULES := runtime services/tavern-core services/egress services/tavern-mcp
 export GOTOOLCHAIN ?= local
 
-.PHONY: test vet fmt fmt-check build up down logs
+.PHONY: test vet fmt fmt-check build up down logs mcp
 
 test: vet
 	@for m in $(MODULES); do echo "== $$m"; (cd $$m && go test ./...) || exit 1; done
@@ -17,6 +17,10 @@ fmt-check:
 
 build:
 	docker compose build
+
+# The Tavern MCP server for Claude Code and other MCP clients (docs/guides/claude-code-mcp.md).
+mcp:
+	cd services/tavern-mcp && go build -trimpath -o ../../dist/tavern-mcp ./cmd/tavern-mcp
 
 up:
 	docker compose up -d --build

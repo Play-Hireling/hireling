@@ -127,6 +127,65 @@ func TestDecisionRoundTripAndPersistence(t *testing.T) {
 	}
 }
 
+func TestGetOneDecision(t *testing.T) {
+	_, srv := newDesk(t, nil)
+	var opened struct{ Decision Decision }
+	if code := call(t, srv, "POST", "/api/decisions", "dev-tok", `{"from":"dev","question":"Merge PR 12?","options":["Merge","Wait"]}`, &opened); code != 200 {
+		t.Fatalf("open: %d", code)
+	}
+	path := "/api/decisions/" + opened.Decision.ID
+	// Only the owner reads it: no token, a hireling's own token and the shared one are 401.
+	for _, tok := range []string{"", "dev-tok", "shared", "owner-tok-x"} {
+		if code := call(t, srv, "GET", path, tok, "", nil); code != 401 {
+			t.Fatalf("token %q: %d, want 401", tok, code)
+		}
+	}
+	var got struct{ Decision Decision }
+	if code := call(t, srv, "GET", path, "owner-tok", "", &got); code != 200 || got.Decision.ID != opened.Decision.ID || got.Decision.Chosen != "" || got.Decision.Question != "Merge PR 12?" {
+		t.Fatalf("open decision: %d %+v", code, got)
+	}
+	// Answered decisions stay readable, with the choice.
+	if code := call(t, srv, "POST", path+"/choose", "owner-tok", `{"option":"wait"}`, nil); code != 200 {
+		t.Fatalf("choose: %d", code)
+	}
+	got = struct{ Decision Decision }{}
+	if code := call(t, srv, "GET", path, "owner-tok", "", &got); code != 200 || got.Decision.Chosen != "Wait" {
+		t.Fatalf("answered decision: %d %+v", code, got)
+	}
+	var open struct{ Decisions []Decision }
+	call(t, srv, "GET", "/api/decisions", "owner-tok", "", &open)
+	if len(open.Decisions) != 0 {
+		t.Fatalf("the list must keep showing open decisions only: %+v", open)
+	}
+	if code := call(t, srv, "GET", "/api/decisions/d-404", "owner-tok", "", nil); code != 404 {
+		t.Fatalf("unknown: %d", code)
+	}
+	if code := call(t, srv, "GET", "/api/decisions/d-404", "dev-tok", "", nil); code != 401 {
+		t.Fatalf("unknown id must not leak existence to a hireling: %d", code)
+	}
+}
+
+func TestOwnerClosedWithoutToken(t *testing.T) {
+	d := &Desk{Agents: []string{"dev"}, SharedToken: "shared"}
+	r := httptest.NewRequest("GET", "/api/tasks", nil)
+	if d.IsOwner(r) {
+		t.Fatal("no owner token configured: nobody is the owner")
+	}
+	r.Header.Set("Authorization", "Bearer ")
+	if d.IsOwner(r) {
+		t.Fatal("an empty bearer must not match an empty owner token")
+	}
+	d.OwnerToken = "owner-tok"
+	r.Header.Set("Authorization", "Bearer owner-tok")
+	if !d.IsOwner(r) {
+		t.Fatal("owner token not recognised")
+	}
+	r.Header.Set("Authorization", "Bearer shared")
+	if d.IsOwner(r) {
+		t.Fatal("the shared hireling token is not the owner's")
+	}
+}
+
 func TestInteractions(t *testing.T) {
 	_, srv := newDesk(t, nil)
 	var it struct{ Interaction Interaction }

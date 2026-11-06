@@ -10,7 +10,7 @@ The software is free. You pay your server and the model API. DeepSeek V4-Flash i
 Today the profile accepts DeepSeek V4-Flash/Pro, with OpenRouter as fallback. Other OpenAI-compatible providers per hireling are on the [roadmap](roadmap.md).
 
 **Can I use Claude Code to run it?**
-Yes — see [Run your tavern with Claude Code](guides/claude-code.md).
+Yes — with the shell CLI ([Run your tavern with Claude Code](guides/claude-code.md)) or the Tavern MCP server ([over MCP](guides/claude-code-mcp.md)).
 
 **Does it need the game?**
 No. The engine runs headless; `bin/tavern` and the API are enough. The game is how the hosted product shows the same state.
