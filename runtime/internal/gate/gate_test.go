@@ -38,6 +38,18 @@ func TestClassifyLocal(t *testing.T) {
 			map[string]any{"tool_slug": "GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER", "arguments": map[string]any{}},
 			map[string]any{"tool_slug": "GITHUB_GET_A_REPOSITORY"},
 		}}},
+		// The names Hermes really uses: mcp__<server>__<tool> (seen in the
+		// Autonomy Log on 2026-11-05: "mcp__gbrain__search blocked").
+		{"mcp__gbrain__search", map[string]any{"query": "canva"}},
+		{"mcp__gbrain__get_page", map[string]any{"slug": "agents/dev"}},
+		{"mcp__gbrain__query", map[string]any{"q": "canva"}},
+		{"mcp__gbrain__recall", map[string]any{"query": "canva"}},
+		{"mcp__gbrain__entity", map[string]any{"name": "dev"}},
+		{"mcp__composio__COMPOSIO_SEARCH_TOOLS", map[string]any{"use_case": "post on instagram"}},
+		{"mcp__composio__COMPOSIO_MANAGE_CONNECTIONS", map[string]any{"toolkits": []any{"github"}}},
+		{"mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL", map[string]any{"tools": []any{
+			map[string]any{"tool_slug": "GITHUB_GET_A_REPOSITORY"},
+		}}},
 	} {
 		if v := Classify(c.tool, c.input, home); v.Kind != Local {
 			t.Errorf("%s %v: kind %d %v, want local", c.tool, c.input, v.Kind, v.Actions)
@@ -113,6 +125,20 @@ func TestClassifyExternal(t *testing.T) {
 		{"browser_exec", map[string]any{"script": "click()"}, "browser_exec"},
 		{"cronjob_manage", map[string]any{"action": "create"}, "cronjob_manage"},
 		{"mcp_slack_send_message", map[string]any{"text": "hi"}, "mcp_slack_send_message"},
+		{"mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL", multi("INSTAGRAM_CREATE_MEDIA_CONTAINER"), "publish_owned_channel"},
+		{"mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL", multi("GMAIL_SEND_EMAIL"), "send_external"},
+		{"mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL", map[string]any{}, "composio_execute"},
+		{"mcp__composio__COMPOSIO_REMOTE_BASH_TOOL", map[string]any{"command": "ls"}, "composio_composio_remote_bash_tool"},
+		{"mcp__slack__send_message", map[string]any{"text": "hi"}, "mcp__slack__send_message"},
+		{"mcp__gbrainx__search", nil, "mcp__gbrainx__search"}, // not our server
+		// GBrain writes are not local: they go through ledger-writer.
+		{"mcp__gbrain__put_page", map[string]any{"slug": "x"}, "mcp__gbrain__put_page"},
+		{"mcp__gbrain__delete_page", map[string]any{"slug": "x"}, "mcp__gbrain__delete_page"},
+		{"mcp__gbrain__remember", map[string]any{"fact": "x"}, "mcp__gbrain__remember"},
+		{"mcp__gbrain__forget", map[string]any{"id": "1"}, "mcp__gbrain__forget"},
+		{"mcp__gbrain__capture", nil, "mcp__gbrain__capture"},
+		{"mcp_gbrain_put_page", nil, "mcp_gbrain_put_page"},
+		{"mcp__gbrain__", nil, "mcp__gbrain__"},
 	} {
 		v := Classify(c.tool, c.input, home)
 		if v.Kind != External || len(v.Actions) == 0 || v.Actions[0].Action != c.want {

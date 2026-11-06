@@ -16,8 +16,20 @@ jobs:
       fail-fast: false
       matrix:
         module: [runtime, services/tavern-core, services/egress, services/tavern-mcp]
+    # The Redis-backed stores (tasks, asks, autonomy, policy grants) test
+    # against a real Redis; without REDIS_TEST_URL those tests skip.
+    services:
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
     env:
       GOTOOLCHAIN: local
+      REDIS_TEST_URL: redis://127.0.0.1:6379/0
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7

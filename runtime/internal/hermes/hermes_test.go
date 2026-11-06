@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -69,8 +70,18 @@ func TestFallbackYAMLKey(t *testing.T) {
 	}
 }
 
+// skipWithoutSh skips tests that run a `#!/bin/sh` script as the hermes
+// binary: Windows cannot exec it.
+func skipWithoutSh(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("fake hermes is a #!/bin/sh script; Windows cannot run it")
+	}
+}
+
 func fakeHermes(t *testing.T, body string) string {
 	t.Helper()
+	skipWithoutSh(t)
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "hermes")
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"+body), 0o755); err != nil {

@@ -112,6 +112,9 @@ func TestRedisBook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Each package's Redis test owns a DB: go test runs packages in
+	// parallel and every one of them flushes its DB first.
+	opt.DB = 1
 	c := redis.NewClient(opt)
 	defer c.Close()
 	if err := c.FlushDB(context.Background()).Err(); err != nil {

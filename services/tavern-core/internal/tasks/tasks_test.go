@@ -8,16 +8,17 @@ import (
 	"time"
 )
 
-func newSvc() (*Service, *Memory, *time.Time) {
-	m := NewMemory()
+func newSvc(st store) (*Service, *time.Time) {
 	now := time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
-	s := &Service{Store: m, Now: func() time.Time { return now }}
-	return s, m, &now
+	s := &Service{Store: st.Store, Now: func() time.Time { return now }}
+	return s, &now
 }
 
-func TestLeaseRenewFinish(t *testing.T) {
+func TestLeaseRenewFinish(t *testing.T) { eachStore(t, leaseRenewFinish) }
+
+func leaseRenewFinish(t *testing.T, st store) {
 	ctx := context.Background()
-	s, m, now := newSvc()
+	s, now := newSvc(st)
 	task, err := s.Create(ctx, CreateInput{Title: "3 hooks", RequestedBy: "social-media"})
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +47,7 @@ func TestLeaseRenewFinish(t *testing.T) {
 		t.Fatal("finished tasks cannot be leased")
 	}
 	types := []string{}
-	for _, e := range m.Events {
+	for _, e := range st.events(t) {
 		types = append(types, e.Type)
 	}
 	want := "created leased renewed done"
@@ -55,9 +56,11 @@ func TestLeaseRenewFinish(t *testing.T) {
 	}
 }
 
-func TestLeaseExpiresBackToQueue(t *testing.T) {
+func TestLeaseExpiresBackToQueue(t *testing.T) { eachStore(t, leaseExpiresBackToQueue) }
+
+func leaseExpiresBackToQueue(t *testing.T, st store) {
 	ctx := context.Background()
-	s, _, now := newSvc()
+	s, now := newSvc(st)
 	task, _ := s.Create(ctx, CreateInput{Title: "x", RequestedBy: "innkeeper"})
 	if _, err := s.Lease(ctx, task.ID, "dev"); err != nil {
 		t.Fatal(err)
@@ -72,24 +75,28 @@ func TestLeaseExpiresBackToQueue(t *testing.T) {
 	}
 }
 
-func TestHandoff(t *testing.T) {
+func TestHandoff(t *testing.T) { eachStore(t, handoff) }
+
+func handoff(t *testing.T, st store) {
 	ctx := context.Background()
-	s, m, _ := newSvc()
+	s, _ := newSvc(st)
 	task, _ := s.Create(ctx, CreateInput{Title: "x", RequestedBy: "innkeeper"})
 	s.Lease(ctx, task.ID, "social-media")
 	got, err := s.Handoff(ctx, task.ID, "social-media", "scriptwriter")
 	if err != nil || got.Owner != "scriptwriter" || got.Status != Queued {
 		t.Fatalf("%v %+v", err, got)
 	}
-	last := m.Events[len(m.Events)-1]
+	last := st.last(t)
 	if last.Type != "handoff" || last.To != "scriptwriter" {
 		t.Fatalf("%+v", last)
 	}
 }
 
-func TestValidation(t *testing.T) {
+func TestValidation(t *testing.T) { eachStore(t, validation) }
+
+func validation(t *testing.T, st store) {
 	ctx := context.Background()
-	s, _, _ := newSvc()
+	s, _ := newSvc(st)
 	if _, err := s.Create(ctx, CreateInput{Title: " "}); err == nil {
 		t.Fatal("empty title")
 	}
@@ -114,10 +121,11 @@ func join(xs []string) string {
 
 // B6: a hireling asking work of another waits for the Innkeeper; approving
 // puts it in the owner's queue, denying cancels it; both are on the timeline.
-func TestRequestedHandoffNeedsApproval(t *testing.T) {
+func TestRequestedHandoffNeedsApproval(t *testing.T) { eachStore(t, requestedHandoffNeedsApproval) }
+
+func requestedHandoffNeedsApproval(t *testing.T, st store) {
 	ctx := context.Background()
-	m := NewMemory()
-	s := &Service{Store: m, Approver: func(a string) bool { return a == "innkeeper" || a == "owner" }}
+	s := &Service{Store: st.Store, Approver: func(a string) bool { return a == "innkeeper" || a == "owner" }}
 
 	// the Innkeeper and the owner assign directly
 	direct, _ := s.Create(ctx, CreateInput{Title: "hooks", RequestedBy: "innkeeper", Owner: "scriptwriter"})
@@ -152,7 +160,7 @@ func TestRequestedHandoffNeedsApproval(t *testing.T) {
 	}
 	// timeline
 	var kinds []string
-	for _, e := range m.Events {
+	for _, e := range st.events(t) {
 		kinds = append(kinds, e.Type)
 	}
 	want := "created,requested,created,approved,requested,denied"
@@ -166,9 +174,11 @@ func TestRequestedHandoffNeedsApproval(t *testing.T) {
 }
 
 // C3 — with the quest's kinds known, every task declares how it moves the goal.
-func TestContributionRequired(t *testing.T) {
+func TestContributionRequired(t *testing.T) { eachStore(t, contributionRequired) }
+
+func contributionRequired(t *testing.T, st store) {
 	ctx := context.Background()
-	s := &Service{Store: NewMemory(), Kinds: func(context.Context) []string { return []string{"leads", "posts", "support"} }}
+	s := &Service{Store: st.Store, Kinds: func(context.Context) []string { return []string{"leads", "posts", "support"} }}
 	if _, err := s.Create(ctx, CreateInput{Title: "x", RequestedBy: "innkeeper"}); !errors.Is(err, ErrNoContribution) {
 		t.Fatalf("task without contribution created: %v", err)
 	}
@@ -198,10 +208,12 @@ func TestContributionRequired(t *testing.T) {
 }
 
 // B3 — P0 > P1 > P2 > P3; ties by the kind closest to the goal, then expected units, then oldest.
-func TestQueueOrder(t *testing.T) {
+func TestQueueOrder(t *testing.T) { eachStore(t, queueOrder) }
+
+func queueOrder(t *testing.T, st store) {
 	ctx := context.Background()
 	clock := time.Date(2026, 11, 20, 9, 0, 0, 0, time.UTC)
-	s := &Service{Store: NewMemory(), Now: func() time.Time { clock = clock.Add(time.Second); return clock },
+	s := &Service{Store: st.Store, Now: func() time.Time { clock = clock.Add(time.Second); return clock },
 		Kinds: func(context.Context) []string { return []string{"revenue", "leads", "posts", "support"} }}
 	mk := func(title, prio, kind string, exp int) {
 		if _, err := s.Create(ctx, CreateInput{Title: title, RequestedBy: "innkeeper", Owner: "scriptwriter", Priority: prio, GoalContribution: Contribution{Kind: kind, Expected: exp}}); err != nil {
@@ -245,11 +257,12 @@ func TestQueueOrder(t *testing.T) {
 
 // B4 — a lease renewed on each step stays; without renewal the sweeper returns
 // it to the queue and logs `expired`; release parks or re-queues it.
-func TestLeaseRenewSweepRelease(t *testing.T) {
+func TestLeaseRenewSweepRelease(t *testing.T) { eachStore(t, leaseRenewSweepRelease) }
+
+func leaseRenewSweepRelease(t *testing.T, st store) {
 	ctx := context.Background()
 	clock := time.Date(2026, 11, 20, 9, 0, 0, 0, time.UTC)
-	mem := NewMemory()
-	s := &Service{Store: mem, Now: func() time.Time { return clock }}
+	s := &Service{Store: st.Store, Now: func() time.Time { return clock }}
 	a, _ := s.Create(ctx, CreateInput{Title: "hooks", RequestedBy: "innkeeper", Owner: "scriptwriter"})
 	b, _ := s.Create(ctx, CreateInput{Title: "carousel", RequestedBy: "innkeeper", Owner: "social-media"})
 	if _, err := s.Lease(ctx, a.ID, "scriptwriter"); err != nil {
@@ -276,7 +289,7 @@ func TestLeaseRenewSweepRelease(t *testing.T) {
 		t.Fatalf("renewed task status %s", got.Status)
 	}
 	expired := 0
-	for _, e := range mem.Events {
+	for _, e := range st.events(t) {
 		if e.Type == "expired" && e.Task == b.ID {
 			expired++
 		}
@@ -299,10 +312,11 @@ func TestLeaseRenewSweepRelease(t *testing.T) {
 
 // B5 — an interrupted task is back in the queue with its progress and an
 // `interrupted` event; the next lease sees the progress.
-func TestInterruptRequeuesWithProgress(t *testing.T) {
+func TestInterruptRequeuesWithProgress(t *testing.T) { eachStore(t, interruptRequeuesWithProgress) }
+
+func interruptRequeuesWithProgress(t *testing.T, st store) {
 	ctx := context.Background()
-	mem := NewMemory()
-	s := &Service{Store: mem}
+	s := &Service{Store: st.Store}
 	a, _ := s.Create(ctx, CreateInput{Title: "hooks", RequestedBy: "innkeeper", Owner: "scriptwriter", Priority: "P2"})
 	if _, err := s.Lease(ctx, a.ID, "scriptwriter"); err != nil {
 		t.Fatal(err)
@@ -317,7 +331,7 @@ func TestInterruptRequeuesWithProgress(t *testing.T) {
 	if q, _ := s.Queue(ctx, "scriptwriter"); len(q) != 1 || q[0].ID != a.ID {
 		t.Fatalf("queue = %v", q)
 	}
-	if last := mem.Events[len(mem.Events)-1]; last.Type != "interrupted" || last.Task != a.ID {
+	if last := st.last(t); last.Type != "interrupted" || last.Task != a.ID {
 		t.Fatalf("last event = %+v", last)
 	}
 	if again, _ := s.Lease(ctx, a.ID, "scriptwriter"); !strings.Contains(again.Progress, "progress-1.md") {
@@ -327,10 +341,11 @@ func TestInterruptRequeuesWithProgress(t *testing.T) {
 
 // B11 — failed turns re-queue until the threshold, then block needs_human;
 // The owner's answer re-queues (count reset) or drops; success resets the count.
-func TestRepeatedFailureEscalates(t *testing.T) {
+func TestRepeatedFailureEscalates(t *testing.T) { eachStore(t, repeatedFailureEscalates) }
+
+func repeatedFailureEscalates(t *testing.T, st store) {
 	ctx := context.Background()
-	mem := NewMemory()
-	s := &Service{Store: mem}
+	s := &Service{Store: st.Store}
 	a, _ := s.Create(ctx, CreateInput{Title: "carousel", RequestedBy: "innkeeper", Owner: "social-media", Priority: "P1"})
 	for i := 1; i <= 3; i++ {
 		if _, err := s.Lease(ctx, a.ID, "social-media"); err != nil {
@@ -352,7 +367,7 @@ func TestRepeatedFailureEscalates(t *testing.T) {
 		if r.Status != want || r.Failures != i || r.LastError != "canva: 502 bad gateway" {
 			t.Fatalf("after %d failures: %+v", i, r)
 		}
-		if last := mem.Events[len(mem.Events)-1]; last.Type != kind {
+		if last := st.last(t); last.Type != kind {
 			t.Fatalf("event %d = %+v", i, last)
 		}
 	}
@@ -385,9 +400,11 @@ func TestRepeatedFailureEscalates(t *testing.T) {
 }
 
 // B11 — threshold 1 escalates at once; Drop cancels; default threshold is 3.
-func TestEscalateThresholdAndDrop(t *testing.T) {
+func TestEscalateThresholdAndDrop(t *testing.T) { eachStore(t, escalateThresholdAndDrop) }
+
+func escalateThresholdAndDrop(t *testing.T, st store) {
 	ctx := context.Background()
-	s := &Service{Store: NewMemory()}
+	s := &Service{Store: st.Store}
 	a, _ := s.Create(ctx, CreateInput{Title: "x", RequestedBy: "innkeeper", Owner: "dev", Priority: "P2"})
 	_, _ = s.Lease(ctx, a.ID, "dev")
 	if r, _ := s.Fail(ctx, a.ID, "dev", "boom", 1); r.Status != Blocked {

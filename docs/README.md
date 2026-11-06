@@ -37,6 +37,7 @@ New here? Read in this order: **Quickstart → Your first order → The tavern �
 ## Project
 - [Architecture](architecture.md)
 - [Security model](security.md)
+- [Design decisions](decisions.md)
 - [Roadmap](roadmap.md)
 - [FAQ](faq.md)
 - [Glossary](glossary.md)
