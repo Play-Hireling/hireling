@@ -14,7 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const tok = "owner-secret-token-123"
+const tok = "owner-secret-token-0123456789abcdef"
 
 // fakeDesk is a Front Desk that records what it is asked. Its error answers
 // echo the token on purpose, to prove the server never passes it on.
@@ -473,3 +473,44 @@ func TestRedactMiddleware(t *testing.T) {
 type errorString string
 
 func (e errorString) Error() string { return string(e) }
+
+// A quest turned off in tavern-core is not "not set yet".
+func TestQuestOff(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(404)
+		io.WriteString(w, `{"error":"quest not enabled"}`)
+	}))
+	defer srv.Close()
+	s := New(desk.New(desk.Config{URL: srv.URL, Token: tok}, srv.Client()))
+	st, ct := mcp.NewInMemoryTransports()
+	ss, err := s.Connect(context.Background(), st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).Connect(context.Background(), ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+	if out := call(t, cs, "get_quest", nil, true); !strings.Contains(out, "without a quest") || strings.Contains(out, "GOAL_TITLE") {
+		t.Fatalf("out: %s", out)
+	}
+}
+
+// Newest first by the instant: "…:00Z" and "…:00.5Z" are in the same second.
+func TestTasksSortByTime(t *testing.T) {
+	cs, f := connect(t, tok)
+	f.set(func() {
+		f.tasksRaw = `{"tasks":[{"id":"T-1","updated_at":"2026-11-05T09:00:00Z"},{"id":"T-2","updated_at":"2026-11-05T09:00:00.5Z"},{"id":"T-3","updated_at":"2026-11-05T08:59:59.9Z"}]}`
+	})
+	out := call(t, cs, "list_tasks", nil, false)
+	var got struct {
+		Tasks []struct {
+			ID string `json:"id"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil || len(got.Tasks) != 3 || got.Tasks[0].ID != "T-2" || got.Tasks[1].ID != "T-1" || got.Tasks[2].ID != "T-3" {
+		t.Fatalf("order: %s", out)
+	}
+}

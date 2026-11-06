@@ -29,6 +29,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Play-Hireling/hireling/services/tavern-mcp/internal/desk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -106,7 +107,8 @@ func New(c *desk.Client) *mcp.Server {
 		Title: "List tasks",
 		Description: "The task board: tasks the hirelings created, who owns each, priority (P0–P3), status " +
 			"(queued, leased, waiting_owner, blocked, done, failed…), progress and the quest contribution. " +
-			"Most recently updated first; filter by owner and status.",
+			"Most recently updated first; filter by owner and status. Returns {total, shown, tasks}: total = tasks matching the filters, " +
+			"shown = how many are in tasks after the limit (default 50, max 500).",
 		Annotations: &mcp.ToolAnnotations{Title: "List tasks", ReadOnlyHint: true, OpenWorldHint: &no},
 	}, h.listTasks)
 
@@ -242,7 +244,7 @@ func (h *handlers) getTask(ctx context.Context, _ *mcp.CallToolRequest, in TaskI
 func (h *handlers) quest(ctx context.Context, _ *mcp.CallToolRequest, _ NoIn) (*mcp.CallToolResult, any, error) {
 	raw, err := h.one(ctx, "/api/quest", "quest")
 	if desk.NotFound(err) {
-		return nil, nil, errors.New("this tavern has no quest yet (set GOAL_TITLE and GOAL_TARGET in the box's .env, or PUT /goal)")
+		return nil, nil, questMissing(err)
 	}
 	if err != nil {
 		return nil, nil, err
@@ -256,6 +258,16 @@ func (h *handlers) get(ctx context.Context, path string) (*mcp.CallToolResult, a
 		return nil, nil, err
 	}
 	return result(raw), nil, nil
+}
+
+// questMissing explains a 404 from /api/quest: the quest is turned off in
+// tavern-core, or on but not set yet.
+func questMissing(err error) error {
+	var e *desk.Error
+	if errors.As(err, &e) && strings.Contains(e.Msg, "not enabled") {
+		return errors.New("this tavern runs without a quest (the quest is turned off in tavern-core)")
+	}
+	return errors.New("this tavern has no quest yet (set GOAL_TITLE and GOAL_TARGET in the box's .env, or PUT /goal)")
 }
 
 // errNoDecision: GET /api/decisions/{id} answered 404 (the desk keeps the last 200).
@@ -327,7 +339,23 @@ func (h *handlers) tasks(ctx context.Context, in TasksIn) (json.RawMessage, erro
 		}
 		rows = append(rows, row{t, x.UpdatedAt})
 	}
-	sort.SliceStable(rows, func(i, j int) bool { return rows[i].updated > rows[j].updated })
+	// Newest first by the instant, not the text: RFC 3339 strings with and
+	// without fractional seconds do not sort as times within one second.
+	at := func(s string) (time.Time, bool) {
+		t, err := time.Parse(time.RFC3339Nano, s)
+		return t, err == nil
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		ti, oki := at(rows[i].updated)
+		tj, okj := at(rows[j].updated)
+		if oki && okj {
+			return ti.After(tj)
+		}
+		if oki != okj {
+			return oki
+		}
+		return rows[i].updated > rows[j].updated
+	})
 	out := struct {
 		Total int               `json:"total"`
 		Shown int               `json:"shown"`

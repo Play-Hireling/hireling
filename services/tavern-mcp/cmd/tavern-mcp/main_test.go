@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-const tok = "owner-secret-token-123"
+const tok = "owner-secret-token-0123456789abcdef"
 
 func TestRunCheck(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -29,13 +29,13 @@ func TestRunCheck(t *testing.T) {
 		t.Fatalf("out: %s", out.String())
 	}
 
-	env["FRONTDESK_OWNER_TOKEN"] = "wrong-token-value"
+	env["FRONTDESK_OWNER_TOKEN"] = "wrong-token-value-0123456789abcdef"
 	out.Reset()
 	errb.Reset()
 	if code := run([]string{"-check"}, func(k string) string { return env[k] }, &out, &errb); code != 1 {
 		t.Fatalf("code %d", code)
 	}
-	if !strings.Contains(errb.String(), "HTTP 401") || strings.Contains(errb.String()+out.String(), "wrong-token-value") {
+	if !strings.Contains(errb.String(), "HTTP 401") || strings.Contains(errb.String()+out.String(), "wrong-token-value-0123456789abcdef") {
 		t.Fatalf("stderr: %s", errb.String())
 	}
 }

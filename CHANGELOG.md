@@ -4,6 +4,9 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Upgrading
+- tavern-core now refuses to start when `FRONTDESK_OWNER_TOKEN` is shorter than 32 characters or equal to a hireling's token. A box set up before this change may have a shorter one: run `./scripts/init-env.sh` again: it now replaces a Front Desk token shorter than 32 characters with 48 random hex characters and keeps the others. Then restart the box (`docker compose up -d`) and use the new owner token for `bin/tavern` and the Tavern MCP server.
+
 ### Added
 - **Tavern MCP server** (`services/tavern-mcp`): orders, status, decisions (read and choose), tasks and the quest as MCP tools and resources over the Front Desk API, on stdio for `claude mcp add` ([guide](docs/guides/claude-code-mcp.md)). It reads the owner token from `FRONTDESK_OWNER_TOKEN` and calls only `/api/*`.
 - **Owner reads under `/api/*`** in tavern-core, with the owner token: `GET /api/tasks`, `/api/tasks/{id}`, `/api/quest`, and `GET /api/decisions/{id}` (open or answered). A proxy that forwards only `/api/*` now serves the whole owner console; the internal `/tasks` and `/goal` are unchanged and stay on the Compose network.
