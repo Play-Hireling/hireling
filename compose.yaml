@@ -292,16 +292,17 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
 
-  # Copies the data-only hireling-client image onto tavern-client. There is
-  # no published digest yet. Set HIRELING_CLIENT_IMAGE=hireling/client:local
-  # after scripts/pack-client.sh. Publishing waits on the license holder
-  # ([PENDENTE TITULAR]). Profile `game` only: without this variable Compose
-  # stops, including `docker compose up`, because the file is interpolated
-  # as a whole. docs/provenance is not in the image. The public notice is
-  # /licenses/NOTICE.
+  # Copies the local data-only client image onto tavern-client. The default
+  # tag is hireling/client:local, which scripts/pack-client.sh builds.
+  # pull_policy: never so Compose does not ask a registry for it. Profile
+  # `game` only: a plain `docker compose up` does not start this service.
+  # Publishing an image waits on the license holder ([PENDENTE TITULAR]).
+  # docs/provenance is not in the image. The public notice is /licenses/NOTICE.
   client-init:
     profiles: [game]
-    image: ${HIRELING_CLIENT_IMAGE:?set HIRELING_CLIENT_IMAGE=hireling/client:local after scripts/pack-client.sh. No image is published yet; publishing waits on the license holder [PENDENTE TITULAR].}
+    image: ${HIRELING_CLIENT_IMAGE:-hireling/client:local}
+    pull_policy: never
+
     volumes: ["tavern-client:/out"]
     restart: "no"
     security_opt: ["no-new-privileges:true"]

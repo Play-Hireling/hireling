@@ -20,4 +20,4 @@ No permissive license (MIT, Apache-2.0, BSD, CC0, or anything of that kind) is g
 
 ## What this image does not carry
 
-Music is not in the image. Faixas de música do jogo are not in the image. Provenance files under `docs/provenance` are not in the image and are not in this public repository. The public record of the sound is the NOTICE.
+The game's music tracks are not in the image. Provenance files under `docs/provenance` are not in the image and are not in this public repository. The public record of the sound is the NOTICE.

@@ -11,21 +11,32 @@ import (
 // tavernSlash sends /tavern to /tavern/ so relative asset URLs in the
 // self-host build (Vite base ”) resolve under the game.
 func (s *Server) tavernSlash(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Hireling-Handler", "tavernSlash")
 	http.Redirect(w, r, "/tavern/", http.StatusPermanentRedirect)
 }
 
 // serveTavern serves the self-host client from ClientDir at /tavern/.
-// HTMLSecurity adds the CSP because index.html is text/html. Files outside
-// the directory, and anything under docs/provenance or withheld, are 404.
-// An empty or missing directory is 404: the engine still serves the panel.
+// It sets TavernContentSecurityPolicy only when it serves a file. A miss,
+// a path that cleans out of /tavern/, and anything under docs/provenance
+// or withheld is a 404, and the middleware then applies the panel policy.
+// An empty ClientDir is that same 404: the panel at / still works.
 func (s *Server) serveTavern(w http.ResponseWriter, r *http.Request) {
 	root := s.ClientDir
 	if root == "" {
 		http.NotFound(w, r)
 		return
 	}
-	rel := strings.TrimPrefix(r.URL.Path, "/tavern/")
-	rel = path.Clean("/" + rel)
+	// Decoded path. "/tavern/../" cleans to "/" and is not this tree.
+	// An encoded slash stays in the segment, so "/tavern/..%2f" arrives
+	// decoded as "/tavern/../" and takes the same exit.
+	w.Header().Set("X-Hireling-Handler", "serveTavern")
+	// path.Clean drops the trailing slash, so "/tavern/" becomes "/tavern".
+	clean := path.Clean(r.URL.Path)
+	if clean != "/tavern" && !strings.HasPrefix(clean, "/tavern/") {
+		http.NotFound(w, r)
+		return
+	}
+	rel := strings.TrimPrefix(clean, "/tavern")
 	rel = strings.TrimPrefix(rel, "/")
 	if rel == "." || rel == "" {
 		rel = "index.html"
@@ -50,7 +61,12 @@ func (s *Server) serveTavern(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// This is the only place the game policy is chosen. The middleware
+	// leaves a policy the handler already set, and uses the panel policy
+	// for every other non-JSON response.
+	w.Header().Set("Content-Security-Policy", TavernContentSecurityPolicy)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Cache-Control", "no-cache")
 	http.ServeContent(w, r, st.Name(), st.ModTime(), f)
 }

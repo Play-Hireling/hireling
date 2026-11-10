@@ -42,4 +42,4 @@ The provenance directory `docs/provenance/audio/doors-2026-11-10/` is not publis
 
 ## Not in the image
 
-No music is in any dist this image is built from. Faixas de música do jogo are out. `guild_working` and `tavern_idle` are out. `packages/assets/withheld/` is out.
+The game's music tracks are not in any dist this image is built from. `guild_working` and `tavern_idle` are out. `packages/assets/withheld/` is out.

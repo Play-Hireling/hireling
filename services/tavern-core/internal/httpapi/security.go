@@ -3,15 +3,13 @@ package httpapi
 import (
 	"mime"
 	"net/http"
-	"strings"
 )
 
 // TavernContentSecurityPolicy is the playhireling #110 policy (head
 // cd6033e072db800a970cd08de810f224f6a2a6b5, packages/assets/public/_headers).
-// It applies only when the request URL path has the prefix "/tavern/" — the
-// game page and its assets. The query string, Referer and Accept are not read.
-// style-src allows 'unsafe-inline' because the game sets style attributes.
-// script-src does not. There is no 'unsafe-eval'.
+// serveTavern sets it when it serves a game file. The middleware does not
+// choose it from the path. style-src allows 'unsafe-inline' because the game
+// sets style attributes. script-src does not. There is no 'unsafe-eval'.
 const TavernContentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; form-action 'self'"
 
 // PanelContentSecurityPolicy is the SH1a policy for the owner panel and every
@@ -19,14 +17,15 @@ const TavernContentSecurityPolicy = "default-src 'self'; script-src 'self'; styl
 // 'unsafe-inline' and no 'unsafe-eval'.
 const PanelContentSecurityPolicy = "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
-// HTMLSecurity sets the CSP for the request path, X-Content-Type-Options:
-// nosniff and Referrer-Policy: no-referrer. /tavern/ (and only that prefix)
-// gets TavernContentSecurityPolicy on every response, including assets. Every
-// other non-JSON response gets PanelContentSecurityPolicy. JSON gets nosniff
-// and no CSP.
+// HTMLSecurity is the default policy. Every non-JSON response gets
+// PanelContentSecurityPolicy, nosniff and Referrer-Policy, unless the
+// handler already set a Content-Security-Policy (serveTavern does that
+// for a file it actually serves). JSON keeps the headers the handler set
+// and gains nosniff. It does not gain a CSP, and Cache-Control and
+// Content-Type are left as the handler wrote them.
 func HTMLSecurity(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		next.ServeHTTP(&htmlHeaderWriter{ResponseWriter: w, path: r.URL.Path}, r)
+		next.ServeHTTP(&htmlHeaderWriter{ResponseWriter: w}, r)
 	})
 }
 
@@ -42,24 +41,10 @@ func setPolicy(h http.Header, policy string) {
 	h.Set("Referrer-Policy", "no-referrer")
 }
 
-// isTavernPath reports whether path is the game or one of its assets.
-// "/tavern/" matches. "/tavern" and "/tavernX" do not. The query is not part
-// of URL.Path, so it cannot select this policy.
-func isTavernPath(path string) bool {
-	return strings.HasPrefix(path, "/tavern/")
-}
-
-func isHTML(contentType string) bool {
-	mt, _, err := mime.ParseMediaType(contentType)
-	return err == nil && mt == "text/html"
-}
-
 // htmlHeaderWriter fills the security headers at WriteHeader, after the
-// handler has set Content-Type. The path was copied from the request URL and
-// is not taken from a header.
+// handler has set Content-Type. It does not read the request path.
 type htmlHeaderWriter struct {
 	http.ResponseWriter
-	path  string
 	wrote bool
 }
 
@@ -73,11 +58,18 @@ func (w *htmlHeaderWriter) WriteHeader(code int) {
 		w.wrote = true
 		ct := w.Header().Get("Content-Type")
 		switch {
-		case isTavernPath(w.path):
-			setPolicy(w.Header(), TavernContentSecurityPolicy)
 		case isJSON(ct):
-			// Every JSON response, including 401, gets nosniff. No CSP.
+			// nosniff only. Do not set a CSP and do not replace Cache-Control
+			// or Content-Type.
 			w.Header().Set("X-Content-Type-Options", "nosniff")
+		case w.Header().Get("Content-Security-Policy") != "":
+			// serveTavern already chose the game policy for a file it serves.
+			if w.Header().Get("X-Content-Type-Options") == "" {
+				w.Header().Set("X-Content-Type-Options", "nosniff")
+			}
+			if w.Header().Get("Referrer-Policy") == "" {
+				w.Header().Set("Referrer-Policy", "no-referrer")
+			}
 		default:
 			setPolicy(w.Header(), PanelContentSecurityPolicy)
 		}

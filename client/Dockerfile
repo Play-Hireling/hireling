@@ -5,7 +5,7 @@
 # The image's only job is to copy those files onto a volume and exit.
 # tavern-core serves the copy at /tavern/ from a read-only mount.
 # docs/provenance is not copied. packages/assets/withheld is not copied.
-# Faixas de música do jogo are not copied.
+# The game's music tracks are not copied.
 FROM busybox:1.37
 
 ARG REVISION=unknown

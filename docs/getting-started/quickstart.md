@@ -158,7 +158,7 @@ See [Quest and tasks](../concepts/quest-and-tasks.md).
 
 ## Optional: pixel-art client
 
-The default `docker compose up` does not start the client. Profile `game` serves a data-only image at `http://127.0.0.1:8080/tavern/` on the same origin as the API. No digest is published. Compose requires `HIRELING_CLIENT_IMAGE` (the whole file is interpolated). Without it, `docker compose --profile game` stops and names the variable. The local tag is `hireling/client:local`, from `scripts/pack-client.sh`. Publishing that image waits on the license holder, who is still [PENDENTE TITULAR]. Do not push one from this checkout.
+The default `docker compose up` does not start the client, and it does not need `HIRELING_CLIENT_IMAGE`. Profile `game` serves a data-only image at `http://127.0.0.1:8080/tavern/` on the same origin as the API. The image name defaults to `hireling/client:local`, which `scripts/pack-client.sh` builds. Compose never pulls that image (`pull_policy: never`). If the tag is not on this machine, `--profile game` fails locally and does not contact a registry. Publishing an image waits on the license holder, who is still [PENDENTE TITULAR]. Do not push one from this checkout.
 
 Build the client from the `main` branch of `Play-Hireling/playhireling` (`npm run build:selfhost`), then pack it locally. Nothing is published:
 

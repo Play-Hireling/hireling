@@ -73,7 +73,6 @@ jobs:
           DEEPSEEK_API_KEY: ci
           FRONTDESK_OWNER_TOKEN: ci
           FRONTDESK_AGENT_TOKEN: ci
-          HIRELING_CLIENT_IMAGE: hireling/client:local
         run: docker compose --profile full --profile test --profile brain --profile game config --quiet
 
   hygiene:
