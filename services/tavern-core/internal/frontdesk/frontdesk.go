@@ -695,6 +695,9 @@ type AgentStatus struct {
 }
 
 func (d *Desk) status(w http.ResponseWriter, r *http.Request) {
+	// The owner panel polls this. A cached 200 would keep a stale party or a
+	// quest that has since been set.
+	w.Header().Set("Cache-Control", "no-store")
 	if !d.owner(r) {
 		errJSON(w, http.StatusUnauthorized, "unauthorized")
 		return

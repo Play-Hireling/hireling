@@ -84,6 +84,23 @@ func TestOrderAckAndStatus(t *testing.T) {
 	}
 }
 
+func TestStatusNoStore(t *testing.T) {
+	_, srv := newDesk(t, nil)
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/status", nil)
+	req.Header.Set("Authorization", "Bearer owner-tok")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	if got := res.Header.Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+}
+
 func TestStatusQuestField(t *testing.T) {
 	d, srv := newDesk(t, nil)
 	var st struct {

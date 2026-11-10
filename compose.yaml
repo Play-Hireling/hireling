@@ -278,8 +278,14 @@ services:
     cap_drop: [ALL]
 
 networks:
+  # The only network with container-to-container traffic (core, redis, hirelings,
+  # egress, and the optional ledger). The bridge name is fixed so the host
+  # firewall rule can name this interface and no other. `outside` is the door
+  # to a host NIC, not a second tavern bridge. `desk` has only tavern-core.
   tavern:
     internal: true   # no route out; everything external goes through `egress`
+    driver_opts:
+      com.docker.network.bridge.name: br-hireling
   outside: {}        # egress (and the brain's git sync) only
   desk: {}           # lets tavern-core publish 127.0.0.1:8080 for the owner
 

@@ -38,7 +38,7 @@ Unknown agents are `401`. Tokens are compared in constant time. tavern-core refu
  "at": "…"}
 ```
 
-`quest` is the same object as [`GET /api/quest`](#the-task-board-and-the-quest-read-only), or `null` when no quest is set. The owner panel reads it here, so a missing quest is an empty state on this 200. `GET /api/quest` is still 404 until a quest is set.
+`quest` is the same object as [`GET /api/quest`](#the-task-board-and-the-quest-read-only), or `null` when no quest is set. The owner panel reads it here, so a missing quest is an empty state on this 200. `GET /api/quest` is still 404 until a quest is set. The response sends `Cache-Control: no-store` so a poll cannot reuse a stale party or quest.
 
 ### `GET /api/decisions` — waiting on you
 → `{"decisions": [{"id": "d-…", "from": "social-media", "question": "…", "options": ["…"], "context": "…", "urgency": "normal", "at": "…"}]}`

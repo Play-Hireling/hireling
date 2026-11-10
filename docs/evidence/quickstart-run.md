@@ -13,34 +13,9 @@ This replaces the earlier **79s** figure. That number was a later run on the sam
 
 ## Firewall, before the clock
 
-`iptables-legacy` `FORWARD` policy was `DROP`, and `iptables --version` reported `nf_tables`. On a user-defined bridge (the same shape as a Compose network, not `docker0`), `ping` between two containers lost 100% of packets.
+`iptables-legacy` `FORWARD` policy was `DROP`, and `iptables --version` reported `nf_tables`. On a user-defined bridge (not `docker0`), `ping` between two containers lost 100% of packets until one legacy `ACCEPT` was inserted. Policy stayed `DROP`. nft `FORWARD` was not modified. The timed run below started only after that. No further firewall change was made during the clock.
 
-`./scripts/preflight.sh` exited 1 and printed the current chain and this command (it does not apply the command itself):
-
-```text
-preflight: iptables-legacy FORWARD policy is DROP.
-Docker's iptables command is the nft backend (iptables --version says nf_tables).
-Compose networks use bridges named br-*, not docker0. Packets between containers miss the legacy docker0 rules and hit this DROP, so tavern-core cannot dial Redis (dial tcp …:6379: i/o timeout) and the first docker compose up exits 1.
-
-This does not turn the firewall off. Docker's nftables rules stay in place and still filter forwarded traffic. The command adds one ACCEPT on the unused legacy table, only for interfaces named br-* (Compose bridges), and only if that rule is missing. It does not flush rules, does not change the FORWARD policy, does not touch INPUT or OUTPUT, does not touch iptables-nft, and does not stop ufw or firewalld.
-
-Current iptables-legacy FORWARD:
--P FORWARD DROP
--A FORWARD -j DOCKER-USER
--A FORWARD -j DOCKER-FORWARD
-
-Inspect the table Docker programs, then apply the one command and run this script again (it must exit 0 before docker compose up):
-  sudo iptables-nft -S FORWARD
-  sudo iptables-legacy -C FORWARD -i br+ -o br+ -j ACCEPT 2>/dev/null || sudo iptables-legacy -I FORWARD 1 -i br+ -o br+ -j ACCEPT
-```
-
-That command was run. Policy stayed `DROP`. nft `FORWARD` was not modified. The legacy chain gained one rule, `-A FORWARD -i br+ -o br+ -j ACCEPT`, inserted at the top. The same ping then received a reply (0% loss). `./scripts/preflight.sh` exited 0:
-
-```text
-preflight: ok (iptables-legacy FORWARD is DROP, and br+ to br+ is already accepted)
-```
-
-The timed run below started only after that. No further firewall change was made during the clock.
+The 95s figure is the image pull and compile (`docker compose up -d --build` was 94s of the 95s, from zero images and an empty builder cache). Pinning the tavern bridge to `br-hireling` does not change that build, so this number still stands. The log of that run is unchanged. The rule to use now is only `-i br-hireling -o br-hireling`, which is what `preflight.sh` prints. A later check on the same machine, with `FORWARD` still `DROP` and that rule absent: ping on a bridge created with `com.docker.network.bridge.name=br-hireling` lost 100% of packets; `sudo ./scripts/preflight.sh` exited 1 and the only suggested rule was `br-hireling`; after that command, the same ping had 0% loss, the policy was still `DROP`, and `sudo ./scripts/preflight.sh` exited 0. Without root, `./scripts/preflight.sh` exited 2 and did not run `sudo`.
 
 ## Timed run
 
@@ -50,7 +25,7 @@ Wall clock from `./scripts/init-env.sh` through the post-order `./bin/tavern sta
 | --- | --- | --- |
 | `./scripts/init-env.sh` | exit 0, tokens written, values not printed | 0s |
 | `${EDITOR:-nano} .env` | exit 0, placeholder `DEEPSEEK_API_KEY` (non-interactive stand-in; value not printed) | 0s |
-| `./scripts/preflight.sh` | exit 0, `br+` already accepted | 0s |
+| `./scripts/preflight.sh` | exit 0, the tavern-bridge accept was already in place | 0s |
 | `docker compose up -d --build` | exit 0, from zero images and an empty builder cache | 94s |
 | `docker compose ps -a` | redis, tavern-core, egress healthy; tavern-init exited 0; three agents up | 1s |
 | `curl http://127.0.0.1:8080/healthz` | HTTP 200 `{"status":"ok",...}` | 0s |

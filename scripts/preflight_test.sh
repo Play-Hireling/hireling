@@ -4,23 +4,43 @@ set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 preflight=$root/scripts/preflight.sh
-fix='sudo iptables-legacy -C FORWARD -i br+ -o br+ -j ACCEPT 2>/dev/null || sudo iptables-legacy -I FORWARD 1 -i br+ -o br+ -j ACCEPT'
+fix='sudo iptables-legacy -C FORWARD -i br-hireling -o br-hireling -j ACCEPT 2>/dev/null || sudo iptables-legacy -I FORWARD 1 -i br-hireling -o br-hireling -j ACCEPT'
 fail=0
 
-for file in "$preflight" "$root/docs/getting-started/quickstart.md"; do
+for file in "$preflight" "$root/docs/getting-started/quickstart.md" "$root/docs/guides/deploy.md"; do
   if ! grep -F -q -- "$fix" "$file"; then
-    echo "missing the legacy FORWARD command in $file"
+    echo "missing the br-hireling FORWARD command in $file"
     fail=1
   fi
 done
 
-# The documented fix is one rule, not a flush and not a disabled firewall.
+if ! grep -F -q -- 'com.docker.network.bridge.name: br-hireling' "$root/compose.yaml"; then
+  echo "compose.yaml does not pin br-hireling"
+  fail=1
+fi
+
+# The documented fix names only the tavern bridge. Host bridges must not appear.
+for file in "$preflight" "$root/docs/getting-started/quickstart.md" "$root/docs/guides/deploy.md"; do
+  for banned in '-i br+' '-o br+' '-i br0' '-o br0' '-i br-lan' '-o br-lan' '-i br-wan' '-o br-wan'; do
+    if grep -F -q -- "$banned" "$file"; then
+      echo "$file contains a bridge match that is not br-hireling: $banned"
+      fail=1
+    fi
+  done
+done
+
 for banned in 'iptables-legacy -F' 'iptables-legacy -P FORWARD ACCEPT' 'ufw disable' 'curl | sh' 'curl |sh'; do
   if grep -F -q -- "$banned" "$preflight"; then
     echo "preflight.sh contains banned text: $banned"
     fail=1
   fi
 done
+
+# The script may print a sudo command. It must not execute sudo.
+if grep -E -n '^[[:space:]]*sudo[[:space:]]' "$preflight" >/dev/null; then
+  echo "preflight.sh executes sudo"
+  fail=1
+fi
 
 run_case() {
   name=$1
@@ -74,13 +94,30 @@ EOF
       fail=1
       return
     fi
+    rule=$(grep -F 'iptables-legacy -C FORWARD' "$out" || true)
+    case $rule in
+      *'-i br-hireling -o br-hireling'*) ;;
+      *)
+        echo "FAIL $name: suggested rule is not br-hireling"
+        echo "$rule"
+        fail=1
+        return
+        ;;
+    esac
+    case $rule in
+      *br0*|*br-lan*|*br-wan*|*br+\ *)
+        echo "FAIL $name: suggested rule names another bridge: $rule"
+        fail=1
+        return
+        ;;
+    esac
     if ! grep -F -q -- "does not flush" "$out" || ! grep -F -q -- "does not stop ufw" "$out"; then
       echo "FAIL $name: explanation incomplete"
       cat "$out"
       fail=1
       return
     fi
-  else
+  elif [ "$want" -eq 0 ]; then
     if grep -F -q -- "$fix" "$out"; then
       echo "FAIL $name: printed the fix on a passing host"
       cat "$out"
@@ -112,11 +149,70 @@ fi
 
 run_case "nft and DROP" 1 "-P FORWARD DROP" "iptables v1.8.10 (nf_tables)" yes
 run_case "nft and ACCEPT" 0 "-P FORWARD ACCEPT" "iptables v1.8.10 (nf_tables)" yes
-run_case "nft DROP but br+ already accepted" 0 "-P FORWARD DROP
--A FORWARD -i br+ -o br+ -j ACCEPT" "iptables v1.8.10 (nf_tables)" yes
+run_case "nft DROP but br-hireling already accepted" 0 "-P FORWARD DROP
+-A FORWARD -i br-hireling -o br-hireling -j ACCEPT" "iptables v1.8.10 (nf_tables)" yes
+run_case "host bridges are not the tavern bridge" 1 "-P FORWARD DROP
+-A FORWARD -i br0 -o br0 -j ACCEPT
+-A FORWARD -i br-lan -o br-lan -j ACCEPT
+-A FORWARD -i br-wan -o br-wan -j ACCEPT" "iptables v1.8.10 (nf_tables)" yes
 run_case "legacy backend keeps DROP" 0 "-P FORWARD DROP
 -A FORWARD -o docker0 -j ACCEPT" "iptables v1.8.10 (legacy)" yes
 run_case "unknown backend and DROP" 1 "-P FORWARD DROP" "" no
+
+# Cannot read the table: exit 2, print the diagnostic and the fix, never exec sudo.
+dir=$(mktemp -d)
+cat >"$dir/iptables-legacy" <<'EOF'
+#!/bin/sh
+echo "Fatal: can't open lock file /run/xtables.lock: Permission denied" >&2
+exit 4
+EOF
+cat >"$dir/sudo" <<'EOF'
+#!/bin/sh
+echo invoked >>"$SUDO_LOG"
+exit 0
+EOF
+chmod +x "$dir/iptables-legacy" "$dir/sudo"
+: >"$dir/sudo.log"
+set +e
+SUDO_LOG=$dir/sudo.log PREFLIGHT_SKIP_SBIN=1 PATH="$dir:/usr/bin:/bin" \
+  sh "$preflight" >"$dir/out" 2>"$dir/err"
+rc=$?
+set -e
+if [ "$rc" -ne 2 ]; then
+  echo "FAIL unreadable table: exit $rc, want 2"
+  cat "$dir/out" "$dir/err"
+  fail=1
+elif [ -s "$dir/sudo.log" ]; then
+  echo "FAIL unreadable table: sudo was executed"
+  fail=1
+elif ! grep -F -q -- "sudo iptables-legacy -S FORWARD" "$dir/out" || ! grep -F -q -- "$fix" "$dir/out"; then
+  echo "FAIL unreadable table: missing diagnostic or fix"
+  cat "$dir/out"
+  fail=1
+elif grep -F -q -- "preflight: ok" "$dir/out"; then
+  echo "FAIL unreadable table: pretended to pass"
+  cat "$dir/out"
+  fail=1
+else
+  rule=$(grep -F 'iptables-legacy -C FORWARD' "$dir/out" || true)
+  case $rule in
+    *'-i br-hireling -o br-hireling'*) ;;
+    *)
+      echo "FAIL unreadable table: suggested rule is not br-hireling"
+      echo "$rule"
+      fail=1
+      ;;
+  esac
+  case $rule in
+    *br0*|*br-lan*|*br-wan*)
+      echo "FAIL unreadable table: suggested rule names another bridge: $rule"
+      fail=1
+      ;;
+  esac
+  if [ "$fail" -eq 0 ]; then
+    echo "ok unreadable table (exit $rc)"
+  fi
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "preflight tests failed"
