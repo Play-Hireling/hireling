@@ -113,7 +113,7 @@ The tavern's own limits still apply: whatever an order says, a hireling cannot r
 
 - It is read from the environment and only ever sent as `Authorization: Bearer` to `FRONTDESK_URL`.
 - It is never logged, and every tool result, resource and error is scrubbed of it before it reaches the client.
-- Plain `http://` is accepted only for this machine by IP (`127.0.0.1`, `::1`; not the name `localhost`, which the hosts file can point anywhere); anything else needs `https://` (or `FRONTDESK_ALLOW_HTTP=1` on a private network you trust). Credentials in the URL are refused, and redirects are not followed.
+- Plain `http://` is accepted only for this machine by IP (`127.0.0.1` or `::1` exactly; not `localhost`, not other `127.x` addresses, not `127.0.0.1@evil`, and not IPv4-mapped IPv6). Anything else needs `https://`, or `FRONTDESK_ALLOW_HTTP` set to exactly `1` on a private network you trust (`true` and `yes` do not). Credentials in the URL are refused, and redirects are not followed.
 
 ## Configuration
 
@@ -121,7 +121,7 @@ The tavern's own limits still apply: whatever an order says, a hireling cannot r
 | --- | --- | --- |
 | `FRONTDESK_URL` | `TAVERN_URL`, else `http://127.0.0.1:8080` | Your tavern-core (`TAVERN_PORT` if you changed it) |
 | `FRONTDESK_OWNER_TOKEN` | `FRONTDESK_TOKEN` | **Required.** The owner token from the box's `.env` (at least 32 characters, as tavern-core requires). `FRONTDESK_TOKEN` is read only when it is unset (not to be confused with a hireling's `FRONTDESK_TOKEN_<ID>`) |
-| `FRONTDESK_ALLOW_HTTP` | — | `1` allows `http://` to a non-loopback host |
+| `FRONTDESK_ALLOW_HTTP` | — | Exactly `1` allows `http://` to a host other than `127.0.0.1` or `::1`. Any other value does not |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | — | When the tavern sits behind Cloudflare Access |
 
 A remote tavern: `FRONTDESK_URL=https://tavern.example.com`, behind TLS and a proxy that exposes only `/api/*` — every tool works through it.

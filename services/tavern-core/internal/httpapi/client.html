@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
 <title>Tavern</title>
 <style>
   :root {
@@ -141,7 +142,6 @@ async function api(path) {
   const res = await fetch(path, { headers: h });
   if (!res.ok) {
     if (res.status === 401) throw new Error("unauthorized");
-    if (res.status === 404) throw new Error("missing");
     throw new Error("http " + res.status);
   }
   return res.json();
@@ -227,7 +227,7 @@ function renderStatus(s) {
 
 function renderQuest(q) {
   const box = $("#quest");
-  const g = q.quest || q;
+  const g = q && (q.quest || q);
   box.replaceChildren();
   if (!g || !g.title) {
     box.appendChild(el("div", "no quest set yet — define one with PUT /goal or GOAL_TITLE", "hint"));
@@ -259,16 +259,22 @@ async function refresh() {
     $("#quest").replaceChildren(el("div", "the quest needs the owner token too", "hint"));
     return;
   }
+  // The quest rides on GET /api/status (200, quest null when unset).
+  // GET /api/quest stays 404 until a quest exists; fetching it is a console
+  // error and used to wipe the party, decisions and table. An unset quest
+  // is the empty state in renderQuest, and status still renders.
+  let s;
   try {
-    const [s, q] = await Promise.all([api("/api/status"), api("/api/quest")]);
-    renderStatus(s);
-    renderQuest(q);
+    s = await api("/api/status");
   } catch (e) {
     document.querySelector("#party .party").replaceChildren(el("div", "could not read the tavern: " + e.message, "hint"));
     document.querySelector("#decisions .cards").replaceChildren();
     document.querySelector("#chat .chat").replaceChildren();
     $("#quest").replaceChildren();
+    return;
   }
+  renderStatus(s);
+  renderQuest(s.quest);
 }
 
 token.addEventListener("change", refresh);

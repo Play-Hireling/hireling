@@ -18,9 +18,18 @@ Each hireling is capped at 512 MB and ~0.5 CPU; idle it uses ~150 MB, during a t
 # Ubuntu/Debian
 curl -fsSL https://get.docker.com | sh
 git clone https://github.com/Play-Hireling/hireling.git /opt/hireling && cd /opt/hireling
-./scripts/init-env.sh && $EDITOR .env
+./scripts/init-env.sh && ${EDITOR:-nano} .env
+./scripts/preflight.sh
 docker compose up -d --build
 ```
+
+`preflight.sh` does not run `sudo`. Exit 0 continues. Exit 2 means it could not read `iptables-legacy`; run `sudo ./scripts/preflight.sh`. Exit 1 means the legacy `FORWARD` policy is `DROP` beside Docker's nft backend. The tavern bridge is `br-hireling` (`compose.yaml`). The fix, which the script only prints, checks before inserting and does not flush or change the policy. It does not match `br0`, `br-lan`, or `br-wan`:
+
+```bash
+sudo iptables-legacy -C FORWARD -i br-hireling -o br-hireling -j ACCEPT 2>/dev/null || sudo iptables-legacy -I FORWARD 1 -i br-hireling -o br-hireling -j ACCEPT
+```
+
+Do not start Compose until `sudo ./scripts/preflight.sh` exits 0.
 
 ## Reaching the Front Desk remotely
 

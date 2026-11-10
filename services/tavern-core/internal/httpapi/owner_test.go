@@ -30,6 +30,7 @@ func newOwnerServer(t *testing.T, withGoal bool) *httptest.Server {
 	if err := desk.Load(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	desk.Quest = s.QuestSnapshot
 	s.Extra, s.Owner = desk.Register, desk.IsOwner
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
@@ -161,6 +162,7 @@ func qaServer(t *testing.T, shared, owner string) (*httptest.Server, *frontdesk.
 	if err := desk.Load(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	desk.Quest = s.QuestSnapshot
 	s.Extra, s.Owner = desk.Register, desk.IsOwner
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
@@ -276,5 +278,30 @@ func TestInternalWritesNeedJSON(t *testing.T) {
 	}
 	if got := qaCall(t, srv, "POST", "/api/command", ownerTok, "application/json", `{"agent":"test","text":"hi"}`); got != http.StatusOK {
 		t.Errorf("owner order: %d", got)
+	}
+}
+
+// The owner panel reads the quest from GET /api/status. With no quest, that
+// field is null and the page stays on a 200; GET /api/quest is still 404.
+func TestPanelQuestComesFromStatus(t *testing.T) {
+	srv := newOwnerServer(t, true)
+	var st struct {
+		Agents []struct {
+			ID string `json:"id"`
+		} `json:"agents"`
+		Decisions []any           `json:"decisions"`
+		Quest     json.RawMessage `json:"quest"`
+	}
+	if code := bearerCall(t, srv, "/api/status", "owner-tok", &st); code != 200 || string(st.Quest) != "null" || len(st.Agents) != 1 || st.Decisions == nil {
+		t.Fatalf("status without a quest: %d agents=%d decisions=%v quest=%s", code, len(st.Agents), st.Decisions, st.Quest)
+	}
+	if code := bearerCall(t, srv, "/api/quest", "owner-tok", nil); code != 404 {
+		t.Fatalf("/api/quest without a quest: %d, want 404", code)
+	}
+	if code := call(t, srv, "PUT", "/goal", "owner", `{"title":"Monthly revenue","target":5000}`, nil); code != 200 {
+		t.Fatalf("set quest: %d", code)
+	}
+	if code := bearerCall(t, srv, "/api/status", "owner-tok", &st); code != 200 || !strings.Contains(string(st.Quest), `"title":"Monthly revenue"`) {
+		t.Fatalf("status with a quest: %d %s", code, st.Quest)
 	}
 }

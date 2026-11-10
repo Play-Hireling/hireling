@@ -22,6 +22,12 @@ func TestReadyURL(t *testing.T) {
 		{name: "compose name allowed", url: "http://tavern-core:8080", allow: true, want: ""},
 		{name: "localhost name is not loopback", url: "http://localhost:8080", want: "must be https://"},
 		{name: "lookalike loopback", url: "http://127.0.0.1.example:8080", want: "must be https://"},
+		{name: "userinfo looks like loopback", url: "http://127.0.0.1@evil", want: "credentials"},
+		{name: "userinfo looks like loopback with flag", url: "http://127.0.0.1@evil", allow: true, want: "credentials"},
+		{name: "127.x is not 127.0.0.1", url: "http://127.0.0.2:8080", want: "must be https://"},
+		{name: "127 shorthand", url: "http://127.1:8080", want: "must be https://"},
+		{name: "ipv4-mapped ipv6", url: "http://[::ffff:127.0.0.1]:8080", want: "must be https://"},
+		{name: "ipv4-mapped hex", url: "http://[::ffff:7f00:1]:8080", want: "must be https://"},
 		{name: "credentials", url: "http://user:not-a-password@tavern-core:8080", allow: true, want: "credentials"},
 		{name: "empty", url: "", want: ErrNotConfigured.Error()},
 	}
@@ -47,5 +53,41 @@ func TestReadyURL(t *testing.T) {
 				t.Fatalf("error %v, want substring %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestLoopbackHost(t *testing.T) {
+	for _, host := range []string{"127.0.0.1", "::1", "0:0:0:0:0:0:0:1"} {
+		if !loopbackHost(host) {
+			t.Fatalf("%s should be loopback", host)
+		}
+	}
+	for _, host := range []string{
+		"127.0.0.1@evil",
+		"127.0.0.2",
+		"127.0.0.10",
+		"127.1",
+		"127.0.0.1.evil",
+		"::ffff:127.0.0.1",
+		"::ffff:7f00:1",
+		"0:0:0:0:0:ffff:127.0.0.1",
+		"::1%lo",
+		"localhost",
+		"",
+	} {
+		if loopbackHost(host) {
+			t.Fatalf("%s treated as loopback", host)
+		}
+	}
+}
+
+func TestAllowHTTPEnv(t *testing.T) {
+	if !AllowHTTPEnv("1") {
+		t.Fatal(`"1" must enable plain http`)
+	}
+	for _, v := range []string{"", "0", "2", "true", "TRUE", "yes", "on", "1 ", " 1", "1\n"} {
+		if AllowHTTPEnv(v) {
+			t.Fatalf("%q must not enable plain http", v)
+		}
 	}
 }

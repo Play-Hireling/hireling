@@ -85,7 +85,9 @@ jobs:
       - name: relative links in markdown
         run: python3 scripts/check-links.py
       - name: shellcheck
-        run: shellcheck scripts/init-env.sh bin/tavern
+        run: shellcheck scripts/init-env.sh scripts/preflight.sh scripts/preflight_test.sh bin/tavern
+      - name: preflight
+        run: sh scripts/preflight_test.sh
       - name: gitleaks
         run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.21.2 detect --source /repo --redact --no-banner
 

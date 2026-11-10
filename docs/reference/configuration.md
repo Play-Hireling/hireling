@@ -16,7 +16,7 @@ Everything is configured with environment variables (per service) and the hireli
 | `HIRELING_LONG_POLL` | on | `off` disables the Front Desk long poll |
 | `HIRELING_SERVER`, `HIRELING_REGION` | profile's `home_server` / `region` | Where it runs; reported with every turn (server flag) |
 | `FRONTDESK_URL` | — | Front Desk base URL (`http://tavern-core:8080` in Compose). Unset = no command queue |
-| `FRONTDESK_ALLOW_HTTP` | — | `1` allows `http://` to a host that is not a loopback IP. Compose sets it, because the desk is on the internal network. Leave it unset when the desk is on the public internet (`https://` only; the name `localhost` is not treated as loopback) |
+| `FRONTDESK_ALLOW_HTTP` | — | Exactly `1` allows `http://` to a host other than `127.0.0.1` or `::1`. `true`, `yes`, and `1 ` do not. Compose sets `1`, because the desk is on the internal network. Leave it unset when the desk is on the public internet. `localhost`, other `127.x` addresses, `127.0.0.1@evil`, and IPv4-mapped IPv6 are not treated as that loopback |
 | `FRONTDESK_TOKEN_<ID>` | — | This hireling's token (`<ID>` = upper-case id, `-` → `_`) |
 | `FRONTDESK_AGENT_TOKEN` | — | Shared token, used when the per-hireling one is unset |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | — | Only when the Front Desk sits behind Cloudflare Access |
@@ -50,7 +50,7 @@ Everything is configured with environment variables (per service) and the hireli
 | --- | --- | --- |
 | `FRONTDESK_URL` | `TAVERN_URL`, else `http://127.0.0.1:8080` | The tavern to manage |
 | `FRONTDESK_OWNER_TOKEN` | `FRONTDESK_TOKEN` | **Required.** The owner token (`FRONTDESK_TOKEN` is read only when it is unset) |
-| `FRONTDESK_ALLOW_HTTP` | — | `1` allows `http://` to a non-loopback host (otherwise `https://` only) |
+| `FRONTDESK_ALLOW_HTTP` | — | Exactly `1` allows `http://` to a host other than `127.0.0.1` or `::1` (otherwise `https://` only). Any other value does not |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | — | Only when the tavern sits behind Cloudflare Access |
 
 ## egress

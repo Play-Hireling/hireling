@@ -131,6 +131,9 @@ func main() {
 		logger.Fatalf("front desk: %v", err) // never prints a token
 	}
 	srv := &httpapi.Server{Gate: gate, Tasks: queue, Usage: spent, Goal: quests, Grants: grants, Log: autoLog, Asks: askBook, Approvals: desk, Ready: ready, Extra: desk.Register, Owner: desk.IsOwner}
+	// The panel reads the quest from GET /api/status so an unset quest is an
+	// empty state on a 200. GET /api/quest stays 404 for API clients.
+	desk.Quest = srv.QuestSnapshot
 	hs := &http.Server{
 		Addr:              env("TAVERN_ADDR", ":8080"),
 		Handler:           srv.Handler(),
