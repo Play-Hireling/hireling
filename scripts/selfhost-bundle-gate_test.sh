@@ -42,11 +42,20 @@ grep -F -q 'docs/provenance' "$err" || fail "provenance rejection did not name d
 rm -rf "$pass_dir/docs"
 
 mkdir -p "$pass_dir/assets/audio/music"
-printf 'song\n' > "$pass_dir/assets/audio/music/cursed_day.mp3"
+printf 'song\n' > "$pass_dir/assets/audio/music/vale_night.mp3"
 if "$gate" "$pass_dir" >/dev/null 2>"$err"; then
-  fail "cursed music was accepted"
+  fail "vale_night.mp3 in assets/audio/music/ was accepted"
 fi
+grep -F -q 'assets/audio/music/vale_night.mp3' "$err" || fail "music rejection did not name the planted track"
 rm -rf "$pass_dir/assets/audio/music"
+
+mkdir -p "$pass_dir/assets/extra"
+printf 'ogg\n' > "$pass_dir/assets/extra/foo.ogg"
+if "$gate" "$pass_dir" >/dev/null 2>"$err"; then
+  fail "foo.ogg outside the SFX allowlist was accepted"
+fi
+grep -F -q 'foo.ogg' "$err" || fail "audio rejection did not name foo.ogg"
+rm -rf "$pass_dir/assets/extra"
 
 printf 'extra\n' > "$pass_dir/assets/audio/sfx/extra.mp3"
 if "$gate" "$pass_dir" >/dev/null 2>"$err"; then

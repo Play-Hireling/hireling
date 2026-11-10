@@ -292,15 +292,16 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
 
-  # Copies the data-only hireling-client image onto tavern-client. The digest
-  # below is a documented placeholder until the Director publishes the image.
-  # It is not a real digest. A local build is hireling/client:local
-  # (scripts/pack-client.sh), set as HIRELING_CLIENT_IMAGE. Profile `game`
-  # only: the default quickstart does not pull it. docs/provenance is not in
-  # the image. The public notice is /licenses/NOTICE.
+  # Copies the data-only hireling-client image onto tavern-client. There is
+  # no published digest yet. Set HIRELING_CLIENT_IMAGE=hireling/client:local
+  # after scripts/pack-client.sh. Publishing waits on the license holder
+  # ([PENDENTE TITULAR]). Profile `game` only: without this variable Compose
+  # stops, including `docker compose up`, because the file is interpolated
+  # as a whole. docs/provenance is not in the image. The public notice is
+  # /licenses/NOTICE.
   client-init:
     profiles: [game]
-    image: ${HIRELING_CLIENT_IMAGE:-ghcr.io/play-hireling/hireling-client@sha256:0000000000000000000000000000000000000000000000000000000000000000}
+    image: ${HIRELING_CLIENT_IMAGE:?set HIRELING_CLIENT_IMAGE=hireling/client:local after scripts/pack-client.sh. No image is published yet; publishing waits on the license holder [PENDENTE TITULAR].}
     volumes: ["tavern-client:/out"]
     restart: "no"
     security_opt: ["no-new-privileges:true"]

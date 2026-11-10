@@ -1,6 +1,6 @@
 # Quickstart
 
-Self-host the engine and the panel. In about ten minutes you get tavern-core, three hirelings (**Innkeeper**, **Scriptwriter** and **Dev**), the owner panel, and the orders API (`./bin/tavern` and `http://127.0.0.1:8080/api/`). The default commands below do not start the pixel-art tavern. That game is not in this repository. A clean run of those commands, from zero images, is recorded at 95s in [the evidence log](../evidence/quickstart-run.md). The public demo is at [playhireling.com/play](https://playhireling.com/play/). The optional [`game` profile](#optional-pixel-art-client) serves a client you build yourself at `/tavern/`.
+Self-host the engine and the panel. In about ten minutes you get tavern-core, three hirelings (**Innkeeper**, **Scriptwriter** and **Dev**), the owner panel, and the orders API (`./bin/tavern` and `http://127.0.0.1:8080/api/`). The default commands below do not start the pixel-art tavern. That game is not in this repository. A clean run of those commands, from zero images, is recorded at 95 s in [the evidence log](../evidence/quickstart-run.md). The public demo is at [playhireling.com/play](https://playhireling.com/play/). The optional [`game` profile](#optional-pixel-art-client) serves a client you build yourself at `/tavern/`.
 
 ## What you need
 
@@ -158,7 +158,7 @@ See [Quest and tasks](../concepts/quest-and-tasks.md).
 
 ## Optional: pixel-art client
 
-The default `docker compose up` does not pull a client image. Profile `game` serves a data-only image at `http://127.0.0.1:8080/tavern/` on the same origin as the API. The digest in `compose.yaml` is a placeholder (`sha256` of zeros) until that image is published. It is not a real image. Do not push one from this checkout.
+The default `docker compose up` does not start the client. Profile `game` serves a data-only image at `http://127.0.0.1:8080/tavern/` on the same origin as the API. No digest is published. Compose requires `HIRELING_CLIENT_IMAGE` (the whole file is interpolated). Without it, `docker compose --profile game` stops and names the variable. The local tag is `hireling/client:local`, from `scripts/pack-client.sh`. Publishing that image waits on the license holder, who is still [PENDENTE TITULAR]. Do not push one from this checkout.
 
 Build the client from the `main` branch of `Play-Hireling/playhireling` (`npm run build:selfhost`), then pack it locally. Nothing is published:
 

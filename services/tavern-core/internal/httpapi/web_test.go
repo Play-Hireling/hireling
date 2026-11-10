@@ -43,7 +43,7 @@ func TestClientServed(t *testing.T) {
 	if ct := res.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
 		t.Fatalf("content-type = %q", ct)
 	}
-	if got := res.Header.Get("Content-Security-Policy"); got != ContentSecurityPolicy {
+	if got := res.Header.Get("Content-Security-Policy"); got != PanelContentSecurityPolicy {
 		t.Fatalf("CSP = %q", got)
 	}
 	if res.Header.Get("X-Content-Type-Options") != "nosniff" || res.Header.Get("Referrer-Policy") != "no-referrer" {
@@ -118,16 +118,13 @@ func TestHTMLSecurityOnEveryHTMLResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	res.Body.Close()
-	if res.Header.Get("Content-Security-Policy") != ContentSecurityPolicy ||
+	if res.Header.Get("Content-Security-Policy") != PanelContentSecurityPolicy ||
 		res.Header.Get("X-Content-Type-Options") != "nosniff" ||
 		res.Header.Get("Referrer-Policy") != "no-referrer" {
 		t.Fatalf("other HTML headers: %v", res.Header)
 	}
-	if strings.Contains(res.Header.Get("Content-Security-Policy"), "unsafe-eval") {
+	if strings.Contains(res.Header.Get("Content-Security-Policy"), "unsafe-") {
 		t.Fatal(res.Header.Get("Content-Security-Policy"))
-	}
-	if !strings.Contains(ContentSecurityPolicy, "style-src 'self' 'unsafe-inline'") || !strings.Contains(ContentSecurityPolicy, "media-src 'self'") || !strings.Contains(ContentSecurityPolicy, "worker-src 'self'") {
-		t.Fatal(ContentSecurityPolicy)
 	}
 	j, err := http.Get(srv.URL + "/plain")
 	if err != nil {

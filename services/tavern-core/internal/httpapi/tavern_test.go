@@ -44,7 +44,7 @@ func TestTavernFilesAndCSP(t *testing.T) {
 	if page.StatusCode != 200 || !strings.Contains(string(body), "play.js") {
 		t.Fatalf("index: %d %s", page.StatusCode, body)
 	}
-	if page.Header.Get("Content-Security-Policy") != ContentSecurityPolicy {
+	if page.Header.Get("Content-Security-Policy") != TavernContentSecurityPolicy {
 		t.Fatalf("CSP = %q", page.Header.Get("Content-Security-Policy"))
 	}
 	if strings.Contains(page.Header.Get("Content-Security-Policy"), "unsafe-eval") {
@@ -57,6 +57,9 @@ func TestTavernFilesAndCSP(t *testing.T) {
 	js.Body.Close()
 	if js.StatusCode != 200 || js.Header.Get("X-Content-Type-Options") != "nosniff" {
 		t.Fatalf("play.js: %d nosniff %q", js.StatusCode, js.Header.Get("X-Content-Type-Options"))
+	}
+	if js.Header.Get("Content-Security-Policy") != TavernContentSecurityPolicy {
+		t.Fatalf("play.js CSP = %q", js.Header.Get("Content-Security-Policy"))
 	}
 	if _, ok := inside(dir, "../client.js"); ok {
 		t.Fatal("client path escaped the root")
@@ -81,6 +84,59 @@ func TestTavernFilesAndCSP(t *testing.T) {
 	miss.Body.Close()
 	if miss.StatusCode != http.StatusNotFound {
 		t.Fatalf("unmounted client: %d", miss.StatusCode)
+	}
+}
+
+// The game policy is selected only by the URL path prefix "/tavern/".
+// The panel and every other route, including an unknown one, keep the
+// stricter panel policy. Query, Referer and Accept cannot select the game.
+func TestCSPDependsOnPathPrefixOnly(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "index.html"), "<!doctype html><html><body>game</body></html>")
+	writeFile(t, filepath.Join(dir, "play.js"), "/* asset */\n")
+	s := &Server{Gate: policy.New(&profile.Profile{ID: "test"}), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(), ClientDir: dir}
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	check := func(rawURL, referer, accept, want string) {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if referer != "" {
+			req.Header.Set("Referer", referer)
+		}
+		if accept != "" {
+			req.Header.Set("Accept", accept)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if got := res.Header.Get("Content-Security-Policy"); got != want {
+			t.Errorf("%s referer %q accept %q: CSP = %q, want %q", rawURL, referer, accept, got, want)
+		}
+		if strings.Contains(res.Header.Get("Content-Security-Policy"), "unsafe-eval") {
+			t.Errorf("%s allows unsafe-eval", rawURL)
+		}
+	}
+
+	check(srv.URL+"/tavern/", "", "", TavernContentSecurityPolicy)
+	check(srv.URL+"/tavern/play.js", "", "", TavernContentSecurityPolicy)
+	check(srv.URL+"/", "", "", PanelContentSecurityPolicy)
+	check(srv.URL+"/no-such-route", "", "", PanelContentSecurityPolicy)
+	check(srv.URL+"/tavernX", "", "", PanelContentSecurityPolicy)
+	check(srv.URL+"/?x=/tavern/", "", "", PanelContentSecurityPolicy)
+	check(srv.URL+"/", srv.URL+"/tavern/", "", PanelContentSecurityPolicy)
+	check(srv.URL+"/", "", "text/html, /tavern/", PanelContentSecurityPolicy)
+
+	if strings.Contains(PanelContentSecurityPolicy, "unsafe-") {
+		t.Fatal(PanelContentSecurityPolicy)
+	}
+	if !strings.Contains(TavernContentSecurityPolicy, "style-src 'self' 'unsafe-inline'") {
+		t.Fatal(TavernContentSecurityPolicy)
 	}
 }
 

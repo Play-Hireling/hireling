@@ -5,7 +5,8 @@
 #
 # --expect-audio requires the eight allowlisted files to be present.
 # Without it, any audio that is present must still be one of those eight.
-# Music, cursed_* tracks, docs/provenance and packages/assets/withheld fail
+# Anything under assets/audio/music/, any audio file outside the SFX
+# allowlist, docs/provenance and packages/assets/withheld fail
 # either way. Denied strings are scanned in text and in binaries
 # (images, audio, wasm, fonts) with grep -a. /api/ may only be status,
 # command, or decisions/{id}/choose.
@@ -90,12 +91,6 @@ audio=$(find "$dir" -type f \( -iname '*.mp3' -o -iname '*.ogg' -o -iname '*.wav
 if [ -n "$audio" ]; then
   printf '%s\n' "$audio" | while IFS= read -r a; do
     [ -n "$a" ] || continue
-    case $a in
-      *cursed_*)
-        echo "cursed track: $a" >&2
-        exit 1
-        ;;
-    esac
     if ! printf '%s\n' "$allow" | grep -F -x -q "$a"; then
       echo "audio not allowlisted: $a" >&2
       exit 1

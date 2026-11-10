@@ -16,7 +16,7 @@ Hireling is **fair source**: the code is public, you can read it, run it, change
 | `docs/`, `scripts/`, `bin/`, `compose.yaml` | [Apache-2.0](LICENSE) | Same |
 | `docs/assets/` (banner, screenshots, animation of the official game) | All rights reserved | Brand art shown in the README; not licensed for reuse — see [TRADEMARKS.md](TRADEMARKS.md) |
 | `services/tavern-core/` | [FSL-1.1-ALv2](services/tavern-core/LICENSE.md) | Any use except a competing commercial service; becomes Apache-2.0 two years after each release |
-| `hireling-client` image | [LicenseRef-Hireling-Client](LICENSE-CLIENT.md) | Run the official image with your own tavern-core. Sound stays inside the product. Holder: [PENDENTE TITULAR] |
+| `hireling-client` image | [LicenseRef-Hireling-Client](LICENSE-CLIENT.md) | Run the official image with your own tavern-core. Sound stays inside the product. Faixas de música do jogo are not included. Holder: [PENDENTE TITULAR] |
 
 A file's directory decides its license. A file that says otherwise in its header wins.
 

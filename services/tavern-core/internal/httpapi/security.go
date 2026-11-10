@@ -3,33 +3,50 @@ package httpapi
 import (
 	"mime"
 	"net/http"
+	"strings"
 )
 
-// ContentSecurityPolicy is the policy on every HTML response from tavern-core,
-// including the owner panel and /tavern/. It is the playhireling tavern policy
-// (playhireling #110, head cd6033e072db800a970cd08de810f224f6a2a6b5,
-// packages/assets/public/_headers), not the panel's old style-src 'self'
-// policy. style-src allows 'unsafe-inline' because the game sets style
-// attributes. script-src does not. There is no 'unsafe-eval': Phaser 4.2.1
-// in the self-host build runs without it.
-const ContentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; form-action 'self'"
+// TavernContentSecurityPolicy is the playhireling #110 policy (head
+// cd6033e072db800a970cd08de810f224f6a2a6b5, packages/assets/public/_headers).
+// It applies only when the request URL path has the prefix "/tavern/" — the
+// game page and its assets. The query string, Referer and Accept are not read.
+// style-src allows 'unsafe-inline' because the game sets style attributes.
+// script-src does not. There is no 'unsafe-eval'.
+const TavernContentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; form-action 'self'"
 
-// HTMLSecurity sets ContentSecurityPolicy, X-Content-Type-Options: nosniff and
-// Referrer-Policy: no-referrer on every response whose Content-Type is
-// text/html. Handler wraps the mux with it, so a later HTML route on the same
-// Server (including /tavern/) is covered without a second copy of the policy.
+// PanelContentSecurityPolicy is the SH1a policy for the owner panel and every
+// other route. It is the default, and it is the stricter of the two: no
+// 'unsafe-inline' and no 'unsafe-eval'.
+const PanelContentSecurityPolicy = "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+
+// HTMLSecurity sets the CSP for the request path, X-Content-Type-Options:
+// nosniff and Referrer-Policy: no-referrer. /tavern/ (and only that prefix)
+// gets TavernContentSecurityPolicy on every response, including assets. Every
+// other non-JSON response gets PanelContentSecurityPolicy. JSON gets nosniff
+// and no CSP.
 func HTMLSecurity(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		next.ServeHTTP(&htmlHeaderWriter{ResponseWriter: w}, r)
+		next.ServeHTTP(&htmlHeaderWriter{ResponseWriter: w, path: r.URL.Path}, r)
 	})
 }
 
-// SetHTMLSecurity writes the three headers. HTML handlers that build a
-// response outside Handler can call it; Handler's wrapper already does.
+// SetHTMLSecurity writes the panel policy and the two companion headers.
+// HTML handlers that build a response outside Handler can call it.
 func SetHTMLSecurity(h http.Header) {
-	h.Set("Content-Security-Policy", ContentSecurityPolicy)
+	setPolicy(h, PanelContentSecurityPolicy)
+}
+
+func setPolicy(h http.Header, policy string) {
+	h.Set("Content-Security-Policy", policy)
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")
+}
+
+// isTavernPath reports whether path is the game or one of its assets.
+// "/tavern/" matches. "/tavern" and "/tavernX" do not. The query is not part
+// of URL.Path, so it cannot select this policy.
+func isTavernPath(path string) bool {
+	return strings.HasPrefix(path, "/tavern/")
 }
 
 func isHTML(contentType string) bool {
@@ -38,9 +55,11 @@ func isHTML(contentType string) bool {
 }
 
 // htmlHeaderWriter fills the security headers at WriteHeader, after the
-// handler has set Content-Type.
+// handler has set Content-Type. The path was copied from the request URL and
+// is not taken from a header.
 type htmlHeaderWriter struct {
 	http.ResponseWriter
+	path  string
 	wrote bool
 }
 
@@ -53,12 +72,14 @@ func (w *htmlHeaderWriter) WriteHeader(code int) {
 	if !w.wrote {
 		w.wrote = true
 		ct := w.Header().Get("Content-Type")
-		if isHTML(ct) {
-			SetHTMLSecurity(w.Header())
-		}
-		// Every JSON response, including 401, gets nosniff from this one wrapper.
-		if isJSON(ct) {
+		switch {
+		case isTavernPath(w.path):
+			setPolicy(w.Header(), TavernContentSecurityPolicy)
+		case isJSON(ct):
+			// Every JSON response, including 401, gets nosniff. No CSP.
 			w.Header().Set("X-Content-Type-Options", "nosniff")
+		default:
+			setPolicy(w.Header(), PanelContentSecurityPolicy)
 		}
 	}
 	w.ResponseWriter.WriteHeader(code)

@@ -21,7 +21,7 @@ The 95s figure is the image pull and compile (`docker compose up -d --build` was
 
 ## Timed run
 
-Wall clock from `./scripts/init-env.sh` through the post-order `./bin/tavern status`: **95s** (2026-11-10T18:47:55Z to 2026-11-10T18:49:30Z).
+Wall clock from `./scripts/init-env.sh` through the post-order `./bin/tavern status`: **95 s** (2026-11-10T18:47:55Z to 2026-11-10T18:49:30Z).
 
 | Step | Result | Time |
 | --- | --- | --- |
