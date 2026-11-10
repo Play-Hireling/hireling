@@ -1,6 +1,6 @@
 # Hireling client license
 
-Copyright [PENDENTE TITULAR]. All rights reserved.
+Copyright 2026 Ashar Software LTDA. All rights reserved.
 
 This license covers the self-host tavern client image (`hireling-client`): the game client, the art, and the sound that image carries. It is not a license for tavern-core. tavern-core stays under the Functional Source License, Apache-2.0 after two years ([LICENSING.md](LICENSING.md)).
 

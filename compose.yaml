@@ -296,7 +296,7 @@ services:
   # tag is hireling/client:local, which scripts/pack-client.sh builds.
   # pull_policy: never so Compose does not ask a registry for it. Profile
   # `game` only: a plain `docker compose up` does not start this service.
-  # Publishing an image waits on the license holder ([PENDENTE TITULAR]).
+  # Publishing an image waits on the license holder (Ashar Software LTDA).
   # docs/provenance is not in the image. The public notice is /licenses/NOTICE.
   client-init:
     profiles: [game]

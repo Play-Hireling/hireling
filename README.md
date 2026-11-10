@@ -66,7 +66,7 @@ curl -fsS http://127.0.0.1:8080/healthz   # {"status":"ok",...}
 
 Full walkthrough, profiles and troubleshooting: **[docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)**. A clean run of that default path, from zero images, took 95 s ([evidence](docs/evidence/quickstart-run.md)).
 
-The pixel-art client is not published. Until the license holder ([PENDENTE TITULAR](LICENSE-CLIENT.md)) decides to publish an image, build one locally. `docker compose up` does not start it. `docker compose --profile game` uses `hireling/client:local` (or `HIRELING_CLIENT_IMAGE` if you set it) and does not pull that image. Without the local build, that command fails on this machine and does not contact a registry.
+The pixel-art client is not published. Until the license holder ([Ashar Software LTDA](LICENSE-CLIENT.md)) decides to publish an image, build one locally. `docker compose up` does not start it. `docker compose --profile game` uses `hireling/client:local` (or `HIRELING_CLIENT_IMAGE` if you set it) and does not pull that image. Without the local build, that command fails on this machine and does not contact a registry.
 
 ```bash
 # in a checkout of Play-Hireling/playhireling, on main:
