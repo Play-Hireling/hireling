@@ -17,8 +17,9 @@
 //	FRONTDESK_URL            http://tavern-core:8080
 //	FRONTDESK_ALLOW_HTTP     exactly "1" allows that plain http URL (Compose sets it; the desk is on the internal network). Any other value does not.
 //	FRONTDESK_TOKEN_<ID>     this hireling's front desk token (falls back to FRONTDESK_AGENT_TOKEN)
+//	FRONTDESK_OWNER_TOKEN    the owner bearer for /tasks, PUT /goal and /actions/* (same value as tavern-core; never logged)
 //	CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET   optional, when the desk sits behind Cloudflare Access
-//	DEEPSEEK_API_KEY          read by Hermes, never by this program
+//	DEEPSEEK_API_KEY          read by Hermes; hireling check classifies it and never logs the value
 //	OPENROUTER_API_KEY        optional; when set, Hermes falls back to the same model on OpenRouter
 //	TAVERN_URL                tavern-core on the Compose network (http://tavern-core:8080); usage per turn goes there
 //	REDIS_URL                 the bar (redis://redis:6379/0); unset = no inbox loop
@@ -28,7 +29,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -85,6 +88,9 @@ func main() {
 			fmt.Printf("fallback openrouter %s\n", m)
 		} else {
 			fmt.Println("fallback off (no OPENROUTER_API_KEY or disabled in the profile)")
+		}
+		if line := providerKeyLine(ctx, os.Getenv("DEEPSEEK_API_KEY")); line != "" {
+			fmt.Println(line)
 		}
 		if l.Tavern != nil {
 			fmt.Printf("usage    %s → tavern-core %s\n", l.UsageDir, os.Getenv("TAVERN_URL"))
@@ -309,13 +315,24 @@ func ledger(logger *log.Logger, p *profile.Profile, opts *hermes.Options) (strin
 const LedgerInstructions = `## The Tavern Ledger (shared brain)
 The tavern keeps one shared brain, the Tavern Ledger: typed pages for the goal, the agents, projects, audiences, decisions and what each hireling learned. Search it with the gbrain tools (search, then get_page) before asking someone else or redoing work, and cite the page you used. Reading goes through the gbrain tools; writing does not — it goes through ledger blocks (below), which the runtime commits as you. Never put customer, KYC, financial or legal data in a question to the brain.`
 
-// tavernClient is nil when TAVERN_URL is unset (usage then stays on the volume).
-func tavernClient(agent string) loop.UsageReporter {
+// tavernCore is nil when TAVERN_URL is unset. Token is the owner bearer already
+// in the environment (FRONTDESK_OWNER_TOKEN). It is not a new secret and it is
+// not placed on a command line: Hermes writes the gate command into config.yaml.
+func tavernCore(agent string) *tavern.Client {
 	url := strings.TrimRight(os.Getenv("TAVERN_URL"), "/")
 	if url == "" {
 		return nil
 	}
-	return &tavern.Client{BaseURL: url, Agent: agent}
+	return &tavern.Client{BaseURL: url, Agent: agent, Token: os.Getenv("FRONTDESK_OWNER_TOKEN")}
+}
+
+// tavernClient is nil when TAVERN_URL is unset (usage then stays on the volume).
+func tavernClient(agent string) loop.UsageReporter {
+	c := tavernCore(agent)
+	if c == nil {
+		return nil
+	}
+	return c
 }
 
 // noteAllowHTTP is true only when FRONTDESK_ALLOW_HTTP is exactly "1".
@@ -327,6 +344,55 @@ func noteAllowHTTP(logger *log.Logger, v string) bool {
 	}
 	logger.Printf("frontdesk: FRONTDESK_ALLOW_HTTP=1; plain http to a non-loopback host is allowed")
 	return true
+}
+
+// providerClient bounds the one key probe hireling check may make. The key
+// is a header and is never written to a log line.
+var providerClient = &http.Client{Timeout: 3 * time.Second}
+
+// providerKeyLine is the hireling check line for a DeepSeek key that cannot
+// start a turn. Empty and placeholder values are decided locally. A key that
+// looks real is asked of the provider once; only 401 and 403 are invalid.
+// A network error prints nothing. The returned text never contains the key.
+func providerKeyLine(ctx context.Context, key string) string {
+	return providerKeyLineAt(ctx, hermes.DeepSeekBaseURL+"/models", key, providerClient)
+}
+
+func providerKeyLineAt(ctx context.Context, url, key string, client *http.Client) string {
+	if providerPlaceholder(key) {
+		return "provider key missing/invalid"
+	}
+	if client == nil {
+		return ""
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(key))
+	res, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer res.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 512))
+	if res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden {
+		return "provider key missing/invalid"
+	}
+	return ""
+}
+
+func providerPlaceholder(key string) bool {
+	k := strings.TrimSpace(strings.ToLower(key))
+	if k == "" {
+		return true
+	}
+	for _, s := range []string{"placeholder", "paste-your-key", "paste_your_key", "your-key-here", "changeme"} {
+		if strings.Contains(k, s) {
+			return true
+		}
+	}
+	return false
 }
 
 func build(logger *log.Logger) (*loop.Loop, error) {
@@ -361,7 +427,7 @@ func build(logger *log.Logger) (*loop.Loop, error) {
 	}
 	// A9: every value named in profile.secrets (plus the Access token) is masked
 	// wherever text leaves the container.
-	known := []string{token, os.Getenv("CF_ACCESS_CLIENT_SECRET"), os.Getenv("OPENROUTER_API_KEY"), os.Getenv("DEEPSEEK_API_KEY"), os.Getenv(composio.KeyEnv), ledgerToken}
+	known := []string{token, os.Getenv("FRONTDESK_OWNER_TOKEN"), os.Getenv("CF_ACCESS_CLIENT_SECRET"), os.Getenv("OPENROUTER_API_KEY"), os.Getenv("DEEPSEEK_API_KEY"), os.Getenv(composio.KeyEnv), ledgerToken}
 	for _, name := range p.Secrets {
 		known = append(known, os.Getenv(name))
 	}
@@ -465,26 +531,28 @@ func build(logger *log.Logger) (*loop.Loop, error) {
 
 // budgetReader reads today's token budget (D7); nil without TAVERN_URL.
 func budgetReader(agent string) loop.BudgetReader {
-	url := strings.TrimRight(os.Getenv("TAVERN_URL"), "/")
-	if url == "" {
+	c := tavernCore(agent)
+	if c == nil {
 		return nil
 	}
-	return &tavern.Client{BaseURL: url, Agent: agent}
+	return c
 }
 
 // askBook is tavern-core's book of asks (D11); nil without TAVERN_URL.
 func askBook(agent string) loop.AskBook {
-	url := strings.TrimRight(os.Getenv("TAVERN_URL"), "/")
-	if url == "" {
+	c := tavernCore(agent)
+	if c == nil {
 		return nil
 	}
-	return &tavern.Client{BaseURL: url, Agent: agent}
+	return c
 }
 
 // gateCommand is the pre_tool_call hook Hermes runs before every tool call
 // (D1). The agent id, home and tavern URL are in the command itself because
 // Hermes may scrub the hook's environment; the exact string is also what the
-// consent allowlist approves.
+// consent allowlist approves. The owner token is not in that string: the
+// command is written to config.yaml. `hireling gate` reads FRONTDESK_OWNER_TOKEN
+// from the environment.
 func gateCommand(id, home string) string {
 	bin, err := os.Executable()
 	if err != nil || bin == "" || strings.ContainsAny(bin, " \t\"'") {
@@ -521,7 +589,7 @@ func runGate(args []string, logger *log.Logger) int {
 	if h.Agent == "" {
 		h.Agent = env("HIRELING_AGENT", "")
 	}
-	h.Checker = &gate.HTTPChecker{BaseURL: tavernURL, Agent: h.Agent}
+	h.Checker = &gate.HTTPChecker{BaseURL: tavernURL, Agent: h.Agent, Token: os.Getenv("FRONTDESK_OWNER_TOKEN")}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(hermes.GateTimeout-2)*time.Second)
 	defer cancel()
 	if err := h.Run(ctx, os.Stdin, os.Stdout, logger.Printf); err != nil {
@@ -533,9 +601,9 @@ func runGate(args []string, logger *log.Logger) int {
 
 // gateGrants is tavern-core's side of the owner's approvals (D1); nil without TAVERN_URL.
 func gateGrants(agent string) loop.GateGrants {
-	url := strings.TrimRight(os.Getenv("TAVERN_URL"), "/")
-	if url == "" {
+	c := tavernCore(agent)
+	if c == nil {
 		return nil
 	}
-	return &tavern.Client{BaseURL: url, Agent: agent}
+	return c
 }

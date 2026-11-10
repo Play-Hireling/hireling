@@ -2,7 +2,9 @@
 
 tavern-core is the tavern's state: tasks with leases, priorities, the quest, usage and budgets, and the policy gate. It also serves the [Front Desk](front-desk.md).
 
-> **Internal API.** Everything below is meant for the internal Docker network. Callers identify themselves with the `X-Hireling: <id>` header (or an `agent` field in the body); there is no token. `compose.yaml` publishes tavern-core on **127.0.0.1 only** — never expose this port to the internet. Put a reverse proxy with authentication in front if you need remote access, and expose only `/api/*`. The owner's read-only board and quest are also served under `/api/*` with the owner token (`GET /api/tasks`, `/api/tasks/{id}`, `/api/quest`, see the [Front Desk API](front-desk.md)); the routes below stay unauthenticated, for the hirelings and `bin/tavern` on the box. Writes to these routes must be `Content-Type: application/json` (`415` otherwise), so a web page cannot post to them cross-site. Authenticated task writes are on the [roadmap](../roadmap.md).
+> **Internal API.** Everything below is meant for the internal Docker network. Callers identify themselves with the `X-Hireling: <id>` header (or an `agent` field in the body). `compose.yaml` publishes tavern-core on **127.0.0.1 only** — never expose this port to the internet. Put a reverse proxy with authentication in front if you need remote access, and expose only `/api/*`. The owner's read-only board and quest are also served under `/api/*` with the owner token (`GET /api/tasks`, `/api/tasks/{id}`, `/api/quest`, see the [Front Desk API](front-desk.md)).
+>
+> **Owner bearer.** Every `/tasks` route, `PUT /goal`, every `/actions/*` route (`/actions/check`, `/actions/pending`, `/actions/answer`) and `POST /asks/answer` require `Authorization: Bearer` set to `FRONTDESK_OWNER_TOKEN`, the same token the Front Desk uses. Missing or wrong token is `401`. The token in a query string is ignored. An empty bearer and an empty owner token do not authenticate. Hirelings and `bin/tavern tasks` send that header. `GET /goal`, `POST /goal/progress`, `POST /asks`, `POST /asks/opened`, `GET /asks` and the other routes below do not. Writes must be `Content-Type: application/json` (`415` otherwise), so a web page cannot post to them cross-site.
 
 ## Health and agents
 
@@ -26,7 +28,7 @@ tavern-core is the tavern's state: tasks with leases, priorities, the quest, usa
 | `GET /autonomy?day=&agent=&limit=` | — | `{"day","done","blocked","entries":[…]}` — the Autonomy Log (D4) |
 | `POST /asks` | `{"agent","task","turn","action","question","blocked"}` | `{"verdict":"yours|joined|ask","level","reason","decision","follow_ups"}` — D11, before a card opens |
 | `POST /asks/opened` | `{"agent","decision","task","action","question","recommended"}` | The recorded card (one per task) |
-| `POST /asks/answer` | `{"decision","choice"}` | `{"found","card":{…,"follow_ups","choice","picked_recommended"}}` |
+| `POST /asks/answer` | `{"decision","choice"}` | `{"found","card":{…,"follow_ups","choice","picked_recommended"}}` — owner bearer, same owner token check (ownerOnly). It does not call Approvals.Confirm |
 | `GET /asks?agent=` | — | `{"open":[…],"stats":[{"agent","opened","joined","bounced","answered","picked_recommended","tasks","asks_per_task","could_have_decided_alone"}]}` |
 
 With `"use": true` the check counts a capped use in its UTC day or ISO week window (D2), consumes a one-time grant from your approval, and remembers a block for the next card. A cap of `0` means none without you; a `*_usd` cap cannot be counted per call, so every spend is yours. An action that cannot be written to the Autonomy Log is blocked.
@@ -38,7 +40,7 @@ With `"use": true` the check counts a capped use in its UTC day or ISO week wind
 | Call | Body | Who |
 | --- | --- | --- |
 | `GET /goal` | — | anyone · `404` until set |
-| `PUT /goal` | `{"title","target","currency","source","kinds","period","current"}` | owner or planner |
+| `PUT /goal` | `{"title","target","currency","source","kinds","period","current"}` | owner or planner, with the owner bearer |
 | `POST /goal/progress` | `{"from","current"}` | the quest's `source` only |
 
 `currency` is a three-letter code (default `USD`). `kinds` default to `revenue, leads, posts, videos, support`. The response adds `percent`, `bar`, `expected_open` and `expected_done` (declared contributions by kind).

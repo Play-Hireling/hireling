@@ -44,7 +44,7 @@ case "$cmd" in
   decisions) need_token; req GET /api/decisions ;;
   choose)    [ $# -ge 2 ] || usage; need_token; id=$1; shift; req POST "/api/decisions/$id/choose" "{\"option\":\"$(js "$*")\"}" ;;
   quest)     req GET /goal ;;
-  tasks)     req GET /tasks ;;
+  tasks)     need_token; req GET /tasks ;;
   health)    req GET /healthz ;;
   -h|--help|help) usage ;;
   *) usage ;;

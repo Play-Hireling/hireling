@@ -34,7 +34,7 @@ tools: [files, web]                 # informational today; real access = network
 network:
   allow: [news.ycombinator.com, reddit.com, wikipedia.org]   # a subdomain matches its parent
 
-secrets: [DEEPSEEK_API_KEY, OPENROUTER_API_KEY]
+secrets: [DEEPSEEK_API_KEY, OPENROUTER_API_KEY, FRONTDESK_OWNER_TOKEN]
 
 ledger:
   read: [goal, audiences/*, learnings/*, projects/*]

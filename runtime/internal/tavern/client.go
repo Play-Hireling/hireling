@@ -21,7 +21,17 @@ import (
 type Client struct {
 	BaseURL string
 	Agent   string
-	HTTP    *http.Client
+	// Token is the owner bearer (FRONTDESK_OWNER_TOKEN). It is sent as
+	// Authorization on /tasks, PUT /goal and /actions/*, and on the client's
+	// other calls. It is never put in the URL and never written into errors.
+	Token string
+	HTTP  *http.Client
+}
+
+func (c *Client) authorize(req *http.Request) {
+	if c != nil && c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
 }
 
 // ErrNotConfigured is returned when TAVERN_URL is unset.
@@ -109,6 +119,7 @@ func (c *Client) post(ctx context.Context, path string, in any, out any) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Hireling", c.Agent)
+	c.authorize(req)
 	h := c.HTTP
 	if h == nil {
 		h = &http.Client{Timeout: 10 * time.Second}
@@ -154,6 +165,7 @@ func (c *Client) Quest(ctx context.Context) (*Quest, error) {
 		return nil, err
 	}
 	req.Header.Set("X-Hireling", c.Agent)
+	c.authorize(req)
 	h := c.HTTP
 	if h == nil {
 		h = &http.Client{Timeout: 10 * time.Second}
@@ -185,6 +197,7 @@ func (c *Client) Queue(ctx context.Context) ([]Task, error) {
 		return nil, err
 	}
 	req.Header.Set("X-Hireling", c.Agent)
+	c.authorize(req)
 	h := c.HTTP
 	if h == nil {
 		h = &http.Client{Timeout: 10 * time.Second}
@@ -216,6 +229,7 @@ func (c *Client) GetTask(ctx context.Context, id string) (*Task, error) {
 		return nil, err
 	}
 	req.Header.Set("X-Hireling", c.Agent)
+	c.authorize(req)
 	h := c.HTTP
 	if h == nil {
 		h = &http.Client{Timeout: 10 * time.Second}
@@ -304,6 +318,7 @@ func (c *Client) RecentBlocked(ctx context.Context, since time.Time) ([]GateAct,
 		return nil, err
 	}
 	req.Header.Set("X-Hireling", c.Agent)
+	c.authorize(req)
 	h := c.HTTP
 	if h == nil {
 		h = &http.Client{Timeout: 10 * time.Second}
@@ -392,7 +407,8 @@ func (c *Client) AskOpened(ctx context.Context, o OpenAsk) error {
 }
 
 // AskAnswer closes a card with the owner's choice (POST /asks/answer); nil when
-// tavern-core has no card with that id.
+// tavern-core has no card with that id. The owner bearer goes out on
+// Authorization, the same header as /tasks and /actions/*, and is not logged.
 func (c *Client) AskAnswer(ctx context.Context, decision, choice string) (*AnsweredAsk, error) {
 	var out struct {
 		Found bool        `json:"found"`
@@ -429,6 +445,7 @@ func (c *Client) Budget(ctx context.Context) (*Budget, error) {
 		return nil, err
 	}
 	req.Header.Set("X-Hireling", c.Agent)
+	c.authorize(req)
 	h := c.HTTP
 	if h == nil {
 		h = &http.Client{Timeout: 10 * time.Second}

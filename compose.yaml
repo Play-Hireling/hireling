@@ -42,6 +42,9 @@ x-hireling-env: &hireling-env
   # calls a desk over the public internet (that desk must be https).
   FRONTDESK_ALLOW_HTTP: "1"
   FRONTDESK_AGENT_TOKEN: ${FRONTDESK_AGENT_TOKEN:?run ./scripts/init-env.sh}
+  # Same owner bearer tavern-core already requires. The runtime sends it on
+  # /tasks, PUT /goal and /actions/*. Not a new secret.
+  FRONTDESK_OWNER_TOKEN: ${FRONTDESK_OWNER_TOKEN:?run ./scripts/init-env.sh}
   LEDGER_WRITER_URL: http://ledger-writer:8090
   DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?paste your DeepSeek key in .env}
   OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}

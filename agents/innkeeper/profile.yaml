@@ -19,7 +19,7 @@ autonomy:
 tools: [files]
 
 # Names only. Values are environment variables of the service (G4).
-secrets: [DEEPSEEK_API_KEY, FRONTDESK_TOKEN_INNKEEPER, OPENROUTER_API_KEY, COMPOSIO_API_KEY]
+secrets: [DEEPSEEK_API_KEY, FRONTDESK_TOKEN_INNKEEPER, FRONTDESK_OWNER_TOKEN, OPENROUTER_API_KEY, COMPOSIO_API_KEY]
 
 # A8: hosts this role may reach through the egress proxy, besides the base list.
 network:

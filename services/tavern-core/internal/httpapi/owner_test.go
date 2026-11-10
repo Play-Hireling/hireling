@@ -32,7 +32,7 @@ func newOwnerServer(t *testing.T, withGoal bool) *httptest.Server {
 	}
 	desk.Quest = s.QuestSnapshot
 	s.Extra, s.Owner = desk.Register, desk.IsOwner
-	srv := httptest.NewServer(s.Handler())
+	srv := listen(s, desk.OwnerToken)
 	t.Cleanup(srv.Close)
 	return srv
 }
@@ -94,7 +94,7 @@ func TestOwnerRoutesNeedTheOwnerToken(t *testing.T) {
 		t.Fatalf("/api/quest: %d %+v", code, q)
 	}
 
-	// The internal routes are unchanged (bin/tavern and the runtimes use them).
+	// /tasks takes the same owner token. GET /goal stays open for the runtime's quest bar.
 	var raw []tasks.Task
 	if code := call(t, srv, "GET", "/tasks", "", "", &raw); code != 200 || len(raw) != 1 {
 		t.Fatalf("/tasks: %d %+v", code, raw)
@@ -269,12 +269,17 @@ func TestInternalWritesNeedJSON(t *testing.T) {
 			}
 		}
 	}
-	if got := qaCall(t, srv, "POST", "/tasks", "", "application/json; charset=utf-8", task); got != http.StatusCreated {
-		t.Errorf("JSON from a runtime: %d, want 201", got)
+	if got := qaCall(t, srv, "POST", "/tasks", "", "application/json; charset=utf-8", task); got != http.StatusUnauthorized {
+		t.Errorf("JSON without the owner token: %d, want 401", got)
 	}
-	// Reads and the Front Desk are unchanged.
-	if got := qaCall(t, srv, "GET", "/tasks", "", "", ""); got != http.StatusOK {
-		t.Errorf("GET /tasks: %d", got)
+	if got := qaCall(t, srv, "POST", "/tasks", ownerTok, "application/json; charset=utf-8", task); got != http.StatusCreated {
+		t.Errorf("JSON with the owner token: %d, want 201", got)
+	}
+	if got := qaCall(t, srv, "GET", "/tasks", "", "", ""); got != http.StatusUnauthorized {
+		t.Errorf("GET /tasks without the owner token: %d, want 401", got)
+	}
+	if got := qaCall(t, srv, "GET", "/tasks", ownerTok, "", ""); got != http.StatusOK {
+		t.Errorf("GET /tasks with the owner token: %d", got)
 	}
 	if got := qaCall(t, srv, "POST", "/api/command", ownerTok, "application/json", `{"agent":"test","text":"hi"}`); got != http.StatusOK {
 		t.Errorf("owner order: %d", got)

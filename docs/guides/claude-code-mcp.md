@@ -87,7 +87,7 @@ Claude Code calls `send_order` (`POST /api/command`) and `tavern_status` (`GET /
 | `get_task` | One task with its history | `GET /api/tasks/{id}` |
 | `get_quest` | The shared quest and its progress bar | `GET /api/quest` |
 
-Every tool except `send_order` and `choose_option` is read-only, and marked so. Every call is under `/api/*` with the owner token; the server never uses tavern-core's internal, unauthenticated routes.
+Every tool except `send_order` and `choose_option` is read-only, and marked so. Every call is under `/api/*` with the owner token; the server does not call `/tasks`, `/goal` or `/actions/*`.
 
 ## Resources
 

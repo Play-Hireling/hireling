@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -27,7 +26,7 @@ func TestTokenBudgetCheck(t *testing.T) {
 	log := autonomy.NewMemory()
 	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: spent,
 		Grants: policy.NewMemoryGrants(), Log: log, Now: func() time.Time { return now }}
-	srv := httptest.NewServer(s.Handler())
+	srv := listen(s, testOwnerToken)
 	defer srv.Close()
 	if err := spent.Add(context.Background(), usage.Turn{Agent: "social-media", CommandID: "msg-0", At: now.Add(-time.Hour),
 		Totals: usage.Totals{InputTokens: 90000, OutputTokens: 10000}}); err != nil {

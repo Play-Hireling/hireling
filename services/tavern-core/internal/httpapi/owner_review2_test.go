@@ -116,19 +116,25 @@ func TestQAJsonOnlyContentTypes(t *testing.T) {
 			t.Errorf("Content-Type %q: want 415, got %d", ct, res.StatusCode)
 		}
 	}
+	owner := strings.Repeat("o", 48)
 	allow := []string{"application/json", "application/json; charset=utf-8", "Application/JSON", " application/json "}
 	for _, ct := range allow {
-		if res := qa3Do(t, srv, "POST", "/tasks", ct, body, ""); res.StatusCode/100 != 2 {
+		if res := qa3Do(t, srv, "POST", "/tasks", ct, body, owner); res.StatusCode/100 != 2 {
 			t.Errorf("Content-Type %q: want it accepted, got %d", ct, res.StatusCode)
 		}
+	}
+	if res := qa3Do(t, srv, "POST", "/tasks", "application/json", body, ""); res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("JSON without the owner token: %d, want 401", res.StatusCode)
 	}
 	ts, _ := svc.List(context.Background())
 	if len(ts) != len(allow) {
 		t.Errorf("tasks created = %d, want %d", len(ts), len(allow))
 	}
-	// GET and OPTIONS are not affected.
-	if res := qa3Do(t, srv, "GET", "/tasks", "", "", ""); res.StatusCode != http.StatusOK {
-		t.Errorf("GET /tasks: %d", res.StatusCode)
+	if res := qa3Do(t, srv, "GET", "/tasks", "", "", ""); res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("GET /tasks without the owner token: %d, want 401", res.StatusCode)
+	}
+	if res := qa3Do(t, srv, "GET", "/tasks", "", "", owner); res.StatusCode != http.StatusOK {
+		t.Errorf("GET /tasks with the owner token: %d", res.StatusCode)
 	}
 	res := qa3Do(t, srv, "OPTIONS", "/tasks", "", "", "")
 	if res.Header.Get("Access-Control-Allow-Origin") != "" {
