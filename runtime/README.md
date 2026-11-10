@@ -115,7 +115,7 @@ hireling quest          # print the quest bar (C1)
    carrying the Connect Link (the owner authorizes on Composio's page, 10-minute link) — never a
    password or token. `hireling check` prints the `hands` line. No key or no toolkits = no hands.
 16. Everything that leaves the container goes through `internal/redact` (**A9**): the values
-   of every variable listed in `profile.secrets`, the front desk token and the Access
+   of every variable listed in `profile.secrets`, the front desk token, the owner token and the Access
    secret are masked, plus credential-shaped strings; summaries are cut to 120 characters
    like the front desk does.
 
@@ -130,6 +130,7 @@ logged and the turn goes on.
 | `HIRELING_SERVER`, `HIRELING_REGION` | reported with every turn (flag in the tavern) |
 | `FRONTDESK_URL` | `http://tavern-core:8080` |
 | `FRONTDESK_TOKEN_<ID>` | this hireling's token (`FRONTDESK_TOKEN_TEST`); falls back to `FRONTDESK_AGENT_TOKEN` |
+| `FRONTDESK_OWNER_TOKEN` | the owner bearer for `/tasks`, `PUT /goal` and `/actions/*`; the same value tavern-core has. Header only, never logged |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | optional: only when the Front Desk sits behind Cloudflare Access |
 | `DEEPSEEK_API_KEY` | read by Hermes only |
 | `OPENROUTER_API_KEY` | optional fallback provider, read by Hermes only |

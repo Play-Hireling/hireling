@@ -19,6 +19,7 @@ Everything is configured with environment variables (per service) and the hireli
 | `FRONTDESK_ALLOW_HTTP` | — | Exactly `1` allows `http://` to a host other than `127.0.0.1` or `::1`. `true`, `yes`, and `1 ` do not. Compose sets `1`, because the desk is on the internal network. Leave it unset when the desk is on the public internet. `localhost`, other `127.x` addresses, `127.0.0.1@evil`, and IPv4-mapped IPv6 are not treated as that loopback |
 | `FRONTDESK_TOKEN_<ID>` | — | This hireling's token (`<ID>` = upper-case id, `-` → `_`) |
 | `FRONTDESK_AGENT_TOKEN` | — | Shared token, used when the per-hireling one is unset |
+| `FRONTDESK_OWNER_TOKEN` | — | The owner bearer tavern-core already uses. The runtime sends it on `/tasks`, `PUT /goal` and `/actions/*`. Compose passes the same `.env` value the core has. Not logged |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | — | Only when the Front Desk sits behind Cloudflare Access |
 | `TAVERN_URL` | — | tavern-core (usage, quest, tasks, leases). Unset = local-only usage |
 | `REDIS_URL` | — | The bar. Unset = no inbox loop |

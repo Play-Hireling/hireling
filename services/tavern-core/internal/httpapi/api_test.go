@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -54,7 +55,35 @@ func newServer() *httptest.Server {
 	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory(), Kinds: kinds}, Usage: usage.NewMemory(),
 		Goal: quests,
 		Now:  func() time.Time { return time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC) }}
-	return httptest.NewServer(s.Handler())
+	return listen(s, testOwnerToken)
+}
+
+// testOwnerToken is what call() sends. It matches the short token the owner
+// tests install on the desk ("owner-tok"); production tokens are longer.
+const testOwnerToken = "owner-tok"
+
+// ownerTokens maps a test server URL to the bearer call() should send.
+var ownerTokens sync.Map
+
+// listen starts s. When Owner is unset it accepts exactly token. call() sends
+// that bearer on every request to the server.
+func listen(s *Server, token string) *httptest.Server {
+	if s.Owner == nil {
+		tok := token
+		s.Owner = func(r *http.Request) bool {
+			h := r.Header.Get("Authorization")
+			const pfx = "Bearer "
+			if tok == "" || !strings.HasPrefix(h, pfx) {
+				return false
+			}
+			return strings.TrimSpace(h[len(pfx):]) == tok
+		}
+	}
+	srv := httptest.NewServer(s.Handler())
+	if token != "" {
+		ownerTokens.Store(srv.URL, token)
+	}
+	return srv
 }
 
 func call(t *testing.T, srv *httptest.Server, method, path, agent, body string, out any) int {
@@ -62,6 +91,11 @@ func call(t *testing.T, srv *httptest.Server, method, path, agent, body string, 
 	req, _ := http.NewRequest(method, srv.URL+path, strings.NewReader(body))
 	if method != http.MethodGet {
 		req.Header.Set("Content-Type", "application/json") // as the runtimes send it
+	}
+	if v, ok := ownerTokens.Load(srv.URL); ok {
+		if tok, _ := v.(string); tok != "" {
+			req.Header.Set("Authorization", "Bearer "+tok)
+		}
 	}
 	if agent != "" {
 		req.Header.Set("X-Hireling", agent)
@@ -218,7 +252,7 @@ func TestHandoffApproval(t *testing.T) {
 	gate := policy.New(p, ink)
 	approver := func(a string) bool { pr := gate.Profile(a); return a == "owner" || (pr != nil && pr.Planner) }
 	s := &Server{Gate: gate, Tasks: &tasks.Service{Store: tasks.NewMemory(), Approver: approver}, Usage: usage.NewMemory()}
-	srv := httptest.NewServer(s.Handler())
+	srv := listen(s, testOwnerToken)
 	defer srv.Close()
 
 	var task tasks.Task
@@ -354,7 +388,7 @@ func TestGateGrantsOverHTTP(t *testing.T) {
 	g.Now = func() time.Time { return now }
 	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(),
 		Grants: g, Approvals: fakeApprovals{}, Now: func() time.Time { return now }}
-	srv := httptest.NewServer(s.Handler())
+	srv := listen(s, testOwnerToken)
 	defer srv.Close()
 
 	var d policy.Decision
@@ -413,7 +447,7 @@ func TestCappedLimitsOverHTTP(t *testing.T) {
 	g.Now = func() time.Time { return now }
 	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(),
 		Grants: g, Approvals: fakeApprovals{}, Now: func() time.Time { return now }}
-	srv := httptest.NewServer(s.Handler())
+	srv := listen(s, testOwnerToken)
 	defer srv.Close()
 	check := func(action string) policy.Decision {
 		var d policy.Decision
@@ -478,7 +512,7 @@ func TestAutonomyLogOverHTTP(t *testing.T) {
 	spent := usage.NewMemory()
 	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: spent,
 		Grants: policy.NewMemoryGrants(), Log: autonomy.NewMemory(), Now: func() time.Time { return now }}
-	srv := httptest.NewServer(s.Handler())
+	srv := listen(s, testOwnerToken)
 	defer srv.Close()
 
 	call(t, srv, "POST", "/actions/check", "dev", `{"action":"open_pr","target":"gh pr create --fill","use":true,"why":"ship the D4 fix","turn":"c-42","task":"T-7"}`, nil)
@@ -533,7 +567,7 @@ func TestAutonomyFirstAsks(t *testing.T) {
 	g := policy.NewMemoryGrants()
 	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(),
 		Grants: g, Asks: asks.NewMemory(), Now: func() time.Time { return now }}
-	srv := httptest.NewServer(s.Handler())
+	srv := listen(s, testOwnerToken)
 	defer srv.Close()
 	pre := func(body string) AskVerdict {
 		var v AskVerdict
@@ -604,7 +638,7 @@ func TestWebCallBudget(t *testing.T) {
 	log := autonomy.NewMemory()
 	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(),
 		Grants: policy.NewMemoryGrants(), Log: log, Now: func() time.Time { return now }}
-	srv := httptest.NewServer(s.Handler())
+	srv := listen(s, testOwnerToken)
 	defer srv.Close()
 	web := func(use bool) policy.Decision {
 		var d policy.Decision
@@ -658,7 +692,7 @@ func TestAnswerNeedsTheOwnersAnswer(t *testing.T) {
 	g := policy.NewMemoryGrants()
 	s := &Server{Gate: policy.New(dev, other), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(),
 		Grants: g, Approvals: desk, Extra: desk.Register, Owner: desk.IsOwner}
-	srv := httptest.NewServer(s.Handler())
+	srv := listen(s, desk.OwnerToken)
 	defer srv.Close()
 
 	deskCall := func(path, token, body string, out any) int {
@@ -911,7 +945,7 @@ func TestAnswerFailClosed(t *testing.T) {
 	p.Autonomy.OwnerDecides = profile.HardDeny
 	g := policy.NewMemoryGrants()
 	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(), Grants: g}
-	srv := httptest.NewServer(s.Handler())
+	srv := listen(s, testOwnerToken)
 	defer srv.Close()
 	var ans struct {
 		Granted []policy.Act `json:"granted"`

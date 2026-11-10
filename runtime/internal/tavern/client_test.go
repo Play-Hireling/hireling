@@ -19,7 +19,7 @@ import (
 // seen is one request the fake tavern-core received.
 type seen struct {
 	Method, Path, RawPath, Query string
-	ContentType, Hireling        string
+	ContentType, Hireling, Auth  string
 	Body                         []byte
 }
 
@@ -57,7 +57,7 @@ func serve(t *testing.T, status int, reply string) (*Client, *fake) {
 		b, _ := io.ReadAll(r.Body)
 		f.mu.Lock()
 		f.reqs = append(f.reqs, seen{Method: r.Method, Path: r.URL.Path, RawPath: r.URL.EscapedPath(), Query: r.URL.RawQuery,
-			ContentType: r.Header.Get("Content-Type"), Hireling: r.Header.Get("X-Hireling"), Body: b})
+			ContentType: r.Header.Get("Content-Type"), Hireling: r.Header.Get("X-Hireling"), Auth: r.Header.Get("Authorization"), Body: b})
 		f.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
@@ -532,6 +532,30 @@ func TestContextCancel(t *testing.T) {
 	}
 	if _, err := c.Quest(ctx); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("quest = %v", err)
+	}
+}
+
+func TestOwnerTokenIsAHeader(t *testing.T) {
+	const tok = "owner-token-value-0123456789abcdef"
+	c, f := serve(t, http.StatusUnauthorized, `{"error":"unauthorized"}`)
+	c.Token = tok
+	_, err := c.Lease(context.Background(), "T-1")
+	if err == nil || strings.Contains(err.Error(), tok) {
+		t.Fatalf("error leaked or missed: %v", err)
+	}
+	s := f.last(t)
+	if s.Auth != "Bearer "+tok {
+		t.Fatalf("Authorization = %q", s.Auth)
+	}
+	if strings.Contains(s.Path+s.RawPath+s.Query, tok) {
+		t.Fatalf("token in the URL: %s %s", s.RawPath, s.Query)
+	}
+	c2, f3 := serve(t, http.StatusOK, `[]`)
+	if _, err := c2.RecentBlocked(context.Background(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if got := f3.last(t).Auth; got != "" {
+		t.Fatalf("empty token still sent %q", got)
 	}
 }
 

@@ -55,7 +55,9 @@ type Checker interface {
 type HTTPChecker struct {
 	BaseURL string
 	Agent   string
-	HTTP    *http.Client
+	// Token is the owner bearer (FRONTDESK_OWNER_TOKEN). Header only.
+	Token string
+	HTTP  *http.Client
 }
 
 // ErrNoTavern means TAVERN_URL was not configured: external actions fail closed.
@@ -82,6 +84,9 @@ func (c *HTTPChecker) Check(ctx context.Context, action, target string, tc Conte
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Hireling", c.Agent)
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
 	h := c.HTTP
 	if h == nil {
 		h = &http.Client{Timeout: 4 * time.Second}

@@ -96,6 +96,8 @@ tavern-core answers *"may this hireling do this action on this target?"*:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8080/actions/check \
+  -H "Authorization: Bearer $FRONTDESK_OWNER_TOKEN" \
+  -H 'Content-Type: application/json' \
   -d '{"agent":"social-media","action":"publish_owned_channel","target":"x.com","use":true}'
 # {"level":"capped","reason":"profile: capped","limit":3,"period":"day","used":1,"counted":true}
 ```

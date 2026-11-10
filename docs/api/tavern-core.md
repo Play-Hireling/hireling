@@ -2,7 +2,9 @@
 
 tavern-core is the tavern's state: tasks with leases, priorities, the quest, usage and budgets, and the policy gate. It also serves the [Front Desk](front-desk.md).
 
-> **Internal API.** Everything below is meant for the internal Docker network. Callers identify themselves with the `X-Hireling: <id>` header (or an `agent` field in the body); there is no token. `compose.yaml` publishes tavern-core on **127.0.0.1 only** — never expose this port to the internet. Put a reverse proxy with authentication in front if you need remote access, and expose only `/api/*`. The owner's read-only board and quest are also served under `/api/*` with the owner token (`GET /api/tasks`, `/api/tasks/{id}`, `/api/quest`, see the [Front Desk API](front-desk.md)); the routes below stay unauthenticated, for the hirelings and `bin/tavern` on the box. Writes to these routes must be `Content-Type: application/json` (`415` otherwise), so a web page cannot post to them cross-site. Authenticated task writes are on the [roadmap](../roadmap.md).
+> **Internal API.** Everything below is meant for the internal Docker network. Callers identify themselves with the `X-Hireling: <id>` header (or an `agent` field in the body). `compose.yaml` publishes tavern-core on **127.0.0.1 only** — never expose this port to the internet. Put a reverse proxy with authentication in front if you need remote access, and expose only `/api/*`. The owner's read-only board and quest are also served under `/api/*` with the owner token (`GET /api/tasks`, `/api/tasks/{id}`, `/api/quest`, see the [Front Desk API](front-desk.md)).
+>
+> **Owner bearer.** Every `/tasks` route, `PUT /goal` and every `/actions/*` route (`/actions/check`, `/actions/pending`, `/actions/answer`) require `Authorization: Bearer` set to `FRONTDESK_OWNER_TOKEN`, the same token the Front Desk uses. Missing or wrong token is `401`. The token in a query string is ignored. Hirelings and `bin/tavern tasks` send that header. `GET /goal`, `POST /goal/progress` and the other routes below do not. Writes must be `Content-Type: application/json` (`415` otherwise), so a web page cannot post to them cross-site.
 
 ## Health and agents
 
@@ -38,7 +40,7 @@ With `"use": true` the check counts a capped use in its UTC day or ISO week wind
 | Call | Body | Who |
 | --- | --- | --- |
 | `GET /goal` | — | anyone · `404` until set |
-| `PUT /goal` | `{"title","target","currency","source","kinds","period","current"}` | owner or planner |
+| `PUT /goal` | `{"title","target","currency","source","kinds","period","current"}` | owner or planner, with the owner bearer |
 | `POST /goal/progress` | `{"from","current"}` | the quest's `source` only |
 
 `currency` is a three-letter code (default `USD`). `kinds` default to `revenue, leads, posts, videos, support`. The response adds `percent`, `bar`, `expected_open` and `expected_done` (declared contributions by kind).

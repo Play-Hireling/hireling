@@ -356,3 +356,30 @@ func TestWebCallBudget(t *testing.T) {
 		t.Fatalf("over the budget: %+v", o)
 	}
 }
+
+func TestHTTPCheckerSendsOwnerToken(t *testing.T) {
+	const tok = "owner-token-value-0123456789abcdef"
+	var auth, query string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Get("Authorization")
+		query = r.URL.RawQuery
+		if strings.Contains(r.URL.String(), tok) {
+			t.Errorf("token in the URL: %s", r.URL.String())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"level":"free","reason":"profile"}`))
+	}))
+	defer srv.Close()
+	c := &HTTPChecker{BaseURL: srv.URL, Agent: "dev", Token: tok}
+	d, err := c.Check(context.Background(), "draft", "notes", Context{})
+	if err != nil || d.Level != "free" {
+		t.Fatalf("check: %+v %v", d, err)
+	}
+	if auth != "Bearer "+tok || query != "" {
+		t.Fatalf("auth %q query %q", auth, query)
+	}
+	down := &HTTPChecker{BaseURL: srv.URL, Agent: "dev"}
+	if _, err := down.Check(context.Background(), "draft", "notes", Context{}); err != nil {
+		t.Fatal(err)
+	}
+}

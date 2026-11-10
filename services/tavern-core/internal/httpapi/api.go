@@ -25,11 +25,15 @@
 //	GET  /api/tasks                   {"tasks": [...]} the task board
 //	GET  /api/tasks/{id}              {"task": {...}} one task with its history
 //	GET  /api/quest                   {"quest": {...}} the shared quest (404 until set)
+//	GET/POST /tasks and /tasks/{id}/* the task board the hirelings use
+//	PUT  /goal                        define the quest
+//	POST /actions/check|pending|answer
 //
-// Everything else is internal network only (Compose); hirelings identify
-// themselves with the X-Hireling header. The Front Desk (/api/*,
-// internal/frontdesk) is mounted on the same server and carries its own
-// bearer tokens.
+// The hirelings send that same bearer from FRONTDESK_OWNER_TOKEN. They still
+// identify themselves with X-Hireling. The other routes (health, agents,
+// usage, asks, autonomy, GET /goal, POST /goal/progress) stay on the Compose
+// network with X-Hireling. The Front Desk (/api/*, internal/frontdesk) is
+// mounted on the same server and carries its own bearer tokens.
 package httpapi
 
 import (
@@ -71,8 +75,9 @@ type Server struct {
 	// Extra registers more routes on the same mux (the Front Desk).
 	Extra func(*http.ServeMux)
 	// Owner reports whether a request carries the owner token (the Front
-	// Desk's IsOwner). It guards GET /api/tasks, /api/tasks/{id} and
-	// /api/quest; nil = those routes answer 401 to everyone.
+	// Desk's IsOwner). It guards GET /api/tasks, /api/tasks/{id},
+	// /api/quest, every /tasks route, PUT /goal and every /actions/* route.
+	// nil = those routes answer 401 to everyone.
 	Owner func(*http.Request) bool
 }
 
@@ -110,45 +115,48 @@ func (s *Server) now() time.Time {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.client) // OS5: the owner panel (not the pixel-art tavern)
+	mux.HandleFunc("GET /client.css", s.clientCSS)
+	mux.HandleFunc("GET /client.js", s.clientJS)
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /agents", s.agents)
 	mux.HandleFunc("GET /agents/{id}/budget", s.budget)
 	mux.HandleFunc("POST /agents/{id}/usage", s.addUsage)
 	mux.HandleFunc("GET /agents/{id}/usage", s.getUsage)
-	mux.HandleFunc("POST /actions/check", s.check)
+	mux.HandleFunc("POST /actions/check", s.ownerOnly(s.check))
 	mux.HandleFunc("GET /agents/{id}/blocked", s.blocked)
-	mux.HandleFunc("POST /actions/pending", s.pending)
-	mux.HandleFunc("POST /actions/answer", s.answer)
+	mux.HandleFunc("POST /actions/pending", s.ownerOnly(s.pending))
+	mux.HandleFunc("POST /actions/answer", s.ownerOnly(s.answer))
 	mux.HandleFunc("GET /autonomy", s.autonomyLog)
 	mux.HandleFunc("POST /asks", s.preAsk)
 	mux.HandleFunc("POST /asks/opened", s.askOpened)
 	mux.HandleFunc("POST /asks/answer", s.askAnswer)
 	mux.HandleFunc("GET /asks", s.listAsks)
 	mux.HandleFunc("GET /goal", s.getGoal)
-	mux.HandleFunc("PUT /goal", s.setGoal)
+	mux.HandleFunc("PUT /goal", s.ownerOnly(s.setGoal))
 	mux.HandleFunc("POST /goal/progress", s.reportGoal)
-	mux.HandleFunc("GET /tasks", s.listTasks)
-	mux.HandleFunc("GET /tasks/{id}", s.getTask)
+	mux.HandleFunc("GET /tasks", s.ownerOnly(s.listTasks))
+	mux.HandleFunc("GET /tasks/{id}", s.ownerOnly(s.getTask))
 	mux.HandleFunc("GET /agents/{id}/queue", s.queue)
-	mux.HandleFunc("POST /tasks", s.createTask)
-	mux.HandleFunc("POST /tasks/{id}/lease", s.lease)
-	mux.HandleFunc("POST /tasks/{id}/renew", s.renew)
-	mux.HandleFunc("POST /tasks/{id}/handoff", s.handoff)
-	mux.HandleFunc("POST /tasks/{id}/finish", s.finish)
-	mux.HandleFunc("POST /tasks/{id}/release", s.release)
-	mux.HandleFunc("POST /tasks/{id}/fail", s.failTurn)
-	mux.HandleFunc("POST /tasks/{id}/unblock", s.unblock)
-	mux.HandleFunc("POST /tasks/{id}/approve", s.approve)
-	mux.HandleFunc("POST /tasks/{id}/deny", s.deny)
-	// The owner's read-only board and quest under /api/*, with the owner token
-	// (the routes above trust the internal network and stay as they are).
+	mux.HandleFunc("POST /tasks", s.ownerOnly(s.createTask))
+	mux.HandleFunc("POST /tasks/{id}/lease", s.ownerOnly(s.lease))
+	mux.HandleFunc("POST /tasks/{id}/renew", s.ownerOnly(s.renew))
+	mux.HandleFunc("POST /tasks/{id}/handoff", s.ownerOnly(s.handoff))
+	mux.HandleFunc("POST /tasks/{id}/finish", s.ownerOnly(s.finish))
+	mux.HandleFunc("POST /tasks/{id}/release", s.ownerOnly(s.release))
+	mux.HandleFunc("POST /tasks/{id}/fail", s.ownerOnly(s.failTurn))
+	mux.HandleFunc("POST /tasks/{id}/unblock", s.ownerOnly(s.unblock))
+	mux.HandleFunc("POST /tasks/{id}/approve", s.ownerOnly(s.approve))
+	mux.HandleFunc("POST /tasks/{id}/deny", s.ownerOnly(s.deny))
+	// The owner's read-only board and quest under /api/*, with the same token.
 	mux.HandleFunc("GET /api/tasks", s.ownerOnly(s.ownerTasks))
 	mux.HandleFunc("GET /api/tasks/{id}", s.ownerOnly(s.ownerTask))
 	mux.HandleFunc("GET /api/quest", s.ownerOnly(s.ownerQuest))
 	if s.Extra != nil {
 		s.Extra(mux)
 	}
-	return jsonOnly(mux)
+	// HTMLSecurity is the one CSP wrapper. Any HTML handler on this mux,
+	// including a future /tavern/, gets the same policy.
+	return HTMLSecurity(jsonOnly(mux))
 }
 
 // jsonOnly refuses a write to the internal routes (everything outside /api/*)
@@ -156,8 +164,9 @@ func (s *Server) Handler() http.Handler {
 // 127.0.0.1 and send a "simple" cross-site POST (text/plain, no preflight);
 // it cannot send application/json without a CORS preflight, which this
 // server never answers. The runtimes, the gate hook and bin/tavern always
-// send application/json. The Front Desk (/api/*) needs a bearer token, which
-// a cross-site request cannot carry either.
+// send application/json. /tasks, PUT /goal, /actions/* and the Front Desk
+// (/api/*) also need the owner bearer, which a cross-site request cannot
+// carry either.
 func jsonOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -818,6 +827,7 @@ func (s *Server) getTask(w http.ResponseWriter, r *http.Request) {
 }
 
 // ownerOnly answers 401 unless the request carries the owner token.
+// The token is the Authorization bearer. A query parameter is never read.
 func (s *Server) ownerOnly(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.Owner == nil || !s.Owner(r) {
