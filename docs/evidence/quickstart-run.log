@@ -1,620 +1,657 @@
 HOST Linux 6.12.113+ x86_64
-DOCKER client 29.1.3 server 29.1.3
-COMPOSE Docker Compose version 2.40.3+ds1-0ubuntu1~24.04.1
-START 2026-11-10T18:05:32Z
-IMAGES_HIRELING_BEFORE 0
-ENV_BEFORE absent
-LEGACY_FORWARD -P FORWARD ACCEPT
+DATE 2026-11-10T18:47:55Z
+Client: Docker Engine - Community
+ Version:           29.9.3
+ API version:       1.56
+ Go version:        go1.26.10
+ Git commit:        5457199
+ Built:             Tue Nov  3 21:41:31 2026
+ OS/Arch:           linux/amd64
+ Context:           default
 
-===== STEP init-env START 2026-11-10T18:05:32Z =====
+Server: Docker Engine - Community
+ Engine:
+  Version:          29.9.3
+  API version:      1.56 (minimum version 1.40)
+  Go version:       go1.26.10
+  Git commit:       70efc0e
+  Built:            Tue Nov  3 21:41:31 2026
+  OS/Arch:          linux/amd64
+  Experimental:     false
+ containerd:
+  Version:          v2.4.2
+  GitCommit:        b7a25261e029d68978bbf290df0a62fc819b3c51
+ runc:
+  Version:          1.5.2
+  GitCommit:        v1.5.2-0-g29dd3dc2
+ docker-init:
+  Version:          0.19.0
+  GitCommit:        de40ad0
+Docker Compose version v5.7.0
+IMAGES_BEFORE 0
+LEGACY_FORWARD
+-P FORWARD DROP
+-A FORWARD -i br+ -o br+ -j ACCEPT
+-A FORWARD -j DOCKER-USER
+-A FORWARD -j DOCKER-FORWARD
+CLOCK_START 2026-11-10T18:47:55Z
+===== STEP init-env START 2026-11-10T18:47:55Z =====
 wrote  FRONTDESK_OWNER_TOKEN
 wrote  FRONTDESK_AGENT_TOKEN
 wrote  LEDGER_DB_PASSWORD
 wrote  GBRAIN_ADMIN_BOOTSTRAP_TOKEN
 
-Next: paste your DeepSeek key into .env (DEEPSEEK_API_KEY=…), then: docker compose up -d --build
+Next: paste your DeepSeek key (nano .env, DEEPSEEK_API_KEY=…), then: ./scripts/preflight.sh && docker compose up -d --build
 ===== STEP init-env END rc=0 elapsed=0s =====
-
-===== STEP edit-env START 2026-11-10T18:05:32Z =====
+===== STEP edit-env START 2026-11-10T18:47:55Z =====
 editor: set DEEPSEEK_API_KEY to a placeholder (value not printed)
 ===== STEP edit-env END rc=0 elapsed=0s =====
-
-===== STEP compose-up START 2026-11-10T18:05:32Z =====
-time="2026-11-10T18:05:32Z" level=warning msg="Docker Compose is configured to build using Bake, but buildx isn't installed"
-#0 building with "default" instance using docker driver
-
-#1 [tavern-core internal] load build definition from Dockerfile
-#1 transferring dockerfile: 818B 0.0s done
+===== STEP preflight START 2026-11-10T18:47:55Z =====
+preflight: reading iptables-legacy needs root.
+preflight: ok (iptables-legacy FORWARD is DROP, and br+ to br+ is already accepted)
+===== STEP preflight END rc=0 elapsed=0s =====
+===== STEP compose-up START 2026-11-10T18:47:55Z =====
+ Image busybox:1.37 Pulling 
+ Image redis:7-alpine Pulling 
+ 68fe9bff2ad4 Pulling fs layer 0B
+ 4a603bc2424c Pulling fs layer 0B
+ 6c0bde7286d0 Pulling fs layer 0B
+ 4f4fb700ef54 Pulling fs layer 0B
+ ad83137ff0b2 Pulling fs layer 0B
+ 710f3da1112f Pulling fs layer 0B
+ 0e50696bc150 Pulling fs layer 0B
+ f55179448640 Pulling fs layer 0B
+ 68fe9bff2ad4 Download complete 0B
+ 6c0bde7286d0 Download complete 0B
+ 4f4fb700ef54 Download complete 0B
+ 68fe9bff2ad4 Extracting 1B
+ ad83137ff0b2 Download complete 0B
+ 710f3da1112f Download complete 0B
+ 68fe9bff2ad4 Extracting 1B
+ 0e50696bc150 Download complete 0B
+ f55179448640 Downloading 12.42MB
+ 4a603bc2424c Download complete 0B
+ 710f3da1112f Extracting 1B
+ 9177639ff916 Download complete 0B
+ 68fe9bff2ad4 Pull complete 0B
+ Image busybox:1.37 Pulled 
+ f55179448640 Download complete 0B
+ dfed3a5d50b9 Download complete 0B
+ 5864e364268f Download complete 0B
+ 6c0bde7286d0 Pull complete 0B
+ ad83137ff0b2 Pull complete 0B
+ 710f3da1112f Pull complete 0B
+ f55179448640 Extracting 1B
+ f55179448640 Extracting 1B
+ 4f4fb700ef54 Pull complete 0B
+ 0e50696bc150 Pull complete 0B
+ 4a603bc2424c Pull complete 0B
+ f55179448640 Pull complete 0B
+ Image redis:7-alpine Pulled 
+ Image hireling/egress:local Building 
+ Image hireling/runtime:local Building 
+ Image hireling/runtime:local Building 
+ Image hireling/tavern-core:local Building 
+ Image hireling/runtime:local Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 2.24kB done
 #1 DONE 0.0s
 
-#2 [egress internal] load build definition from Dockerfile
-#2 transferring dockerfile: 790B 0.0s done
+#2 [tavern-core internal] load build definition from Dockerfile
+#2 transferring dockerfile: 818B 0.0s done
 #2 DONE 0.0s
 
-#3 [tavern-core internal] load metadata for docker.io/library/golang:1.27-alpine
+#3 [egress internal] load build definition from Dockerfile
+#3 transferring dockerfile: 790B 0.0s done
 #3 DONE 0.0s
 
-#4 [egress internal] load metadata for gcr.io/distroless/static-debian12:nonroot
-#4 DONE 0.9s
+#4 [agent-dev internal] load build definition from Dockerfile
+#4 transferring dockerfile: 1.94kB 0.0s done
+#4 DONE 0.0s
 
-#5 [egress internal] load .dockerignore
-#5 transferring context: 2B done
-#5 DONE 0.0s
+#5 [agent-innkeeper internal] load metadata for docker.io/library/golang:1.27-alpine
+#5 DONE 0.3s
 
-#6 [tavern-core internal] load .dockerignore
-#6 transferring context: 2B done
-#6 DONE 0.0s
+#6 [agent-dev internal] load metadata for docker.io/nousresearch/hermes-agent:latest
+#6 DONE 0.3s
 
-#7 [egress internal] load build context
-#7 transferring context: 548.23kB 0.0s done
+#7 [agent-innkeeper internal] load .dockerignore
+#7 transferring context: 2B done
 #7 DONE 0.0s
 
-#8 [tavern-core internal] load build context
-#8 transferring context: 812.75kB 0.0s done
+#8 [agent-innkeeper internal] load build context
+#8 transferring context: 533.94kB done
 #8 DONE 0.0s
 
-#9 [tavern-core build 1/8] FROM docker.io/library/golang:1.27-alpine@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18
-#9 resolve docker.io/library/golang:1.27-alpine@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 0.0s done
-#9 DONE 0.0s
+#9 [agent-innkeeper build 1/6] FROM docker.io/library/golang:1.27-alpine@sha256:eb61c3873c97416fff0116553fff65d67a3549f72e11d9758849a689cdd8b523
+#9 resolve docker.io/library/golang:1.27-alpine@sha256:eb61c3873c97416fff0116553fff65d67a3549f72e11d9758849a689cdd8b523 done
+#9 sha256:c050182f513fb753ca709ec66cab639c3c37a5356e5d597ca81bcddcf2aaee91 126B / 126B 0.0s done
+#9 sha256:c050182f513fb753ca709ec66cab639c3c37a5356e5d597ca81bcddcf2aaee91 126B / 126B 0.0s done
+#9 sha256:1d88fd0fb393f123f061aada1719163fe157015d4f15ab0a77954f6b499de6de 244.47kB / 244.47kB 0.1s done
+#9 sha256:881fc932939efef04ca120ad44bbd2c0917851eb247aa4995428afb1e80ede17 3.85MB / 3.85MB 0.1s done
+#9 extracting sha256:881fc932939efef04ca120ad44bbd2c0917851eb247aa4995428afb1e80ede17 0.1s done
+#9 extracting sha256:881fc932939efef04ca120ad44bbd2c0917851eb247aa4995428afb1e80ede17 0.1s done
+#9 extracting sha256:1d88fd0fb393f123f061aada1719163fe157015d4f15ab0a77954f6b499de6de 0.0s done
+#9 sha256:83d129a974dd319fef9f5f496bf3a04194c14ba0fbf95635c2d5577185dd0b2f 12.58MB / 71.22MB 0.2s
+#9 sha256:83d129a974dd319fef9f5f496bf3a04194c14ba0fbf95635c2d5577185dd0b2f 27.26MB / 71.22MB 0.3s
+#9 ...
 
-#10 [tavern-core build 2/8] WORKDIR /src
-#10 DONE 0.0s
+#7 [tavern-core internal] load .dockerignore
+#7 transferring context: 2B done
+#7 DONE 0.0s
 
-#11 [egress build 3/8] COPY runtime/go.mod runtime/go.sum ./runtime/
+#10 [egress internal] load metadata for gcr.io/distroless/static-debian12:nonroot
+#10 DONE 0.8s
+
+#11 [egress internal] load build context
+#11 transferring context: 551.76kB 0.0s done
 #11 DONE 0.0s
 
-#12 [egress build 3/8] COPY runtime/go.mod runtime/go.sum ./runtime/
-#12 CACHED
+#12 [tavern-core internal] load build context
+#12 transferring context: 820.14kB 0.0s done
+#12 DONE 0.0s
 
-#13 [egress build 4/8] COPY services/egress/go.mod services/egress/go.sum ./services/egress/
-#13 DONE 0.0s
+#9 [tavern-core build 1/6] FROM docker.io/library/golang:1.27-alpine@sha256:eb61c3873c97416fff0116553fff65d67a3549f72e11d9758849a689cdd8b523
+#9 resolve docker.io/library/golang:1.27-alpine@sha256:eb61c3873c97416fff0116553fff65d67a3549f72e11d9758849a689cdd8b523 done
+#9 sha256:c050182f513fb753ca709ec66cab639c3c37a5356e5d597ca81bcddcf2aaee91 126B / 126B 0.0s done
+#9 sha256:1d88fd0fb393f123f061aada1719163fe157015d4f15ab0a77954f6b499de6de 244.47kB / 244.47kB 0.1s done
+#9 sha256:881fc932939efef04ca120ad44bbd2c0917851eb247aa4995428afb1e80ede17 3.85MB / 3.85MB 0.1s done
+#9 extracting sha256:881fc932939efef04ca120ad44bbd2c0917851eb247aa4995428afb1e80ede17 0.1s done
+#9 extracting sha256:1d88fd0fb393f123f061aada1719163fe157015d4f15ab0a77954f6b499de6de 0.0s done
+#9 sha256:83d129a974dd319fef9f5f496bf3a04194c14ba0fbf95635c2d5577185dd0b2f 41.94MB / 71.22MB 0.5s
+#9 sha256:83d129a974dd319fef9f5f496bf3a04194c14ba0fbf95635c2d5577185dd0b2f 57.67MB / 71.22MB 0.6s
+#9 sha256:83d129a974dd319fef9f5f496bf3a04194c14ba0fbf95635c2d5577185dd0b2f 71.22MB / 71.22MB 0.8s done
+#9 extracting sha256:83d129a974dd319fef9f5f496bf3a04194c14ba0fbf95635c2d5577185dd0b2f
+#9 ...
 
-#14 [egress stage-1 1/3] FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
-#14 resolve gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab 0.0s done
+#13 [egress stage-1 1/3] FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+#13 resolve gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab 0.0s done
+#13 sha256:96ed2737ae312e0bc637b40783f7c2f23416cb72ca957aa01855f1614278e64b 143.35kB / 143.35kB 0.3s done
+#13 sha256:b839dfae01f66e15c6a8b63520557ed315bdfe036342fa7a0c537259f10d7a9a 351B / 351B 0.2s done
+#13 sha256:dcaa5a89b0ccda4b283e16d0b4d0891cd93d5fe05c6798f7806781a6a2d84354 314B / 314B 0.2s done
+#13 sha256:dd64bf2dd177757451a98fcdc999a339c35dee5d9872d8f4dc69c8f3c4dd0112 80B / 80B 0.2s done
+#13 sha256:3214acf345c0cc6bbdb56b698a41ccdefc624a09d6beb0d38b5de0b2303ecaf4 123B / 123B 0.1s done
+#13 sha256:52630fc75a18675c530ed9eba5f55eca09b03e91bd5bc15307918bbc1a7e7296 162B / 162B 0.1s done
+#13 sha256:7c12895b777bcaa8ccae0605b4de635b68fc32d60fa08f421dc3818bf55ee212 188B / 188B 0.1s done
+#13 sha256:2780920e5dbfbe103d03a583ed75345306e572ec5a48cb10361f046767d9f29a 67B / 67B 0.1s done
+#13 sha256:bf7a4185f01524837d19abde915ffde84e64368b250f5b5e9f6f75aea62a11d4 29.00kB / 29.00kB 0.2s done
+#13 sha256:39dc083afc39bd8dc43d456fe7ff7d39292e593bb2769972c11bb2e5f9119386 445.71kB / 445.71kB 0.2s done
+#13 sha256:990a9c434e5e0f11549a8d4a41a1991e621b04e30cd63269adbc97b1dc38fd7e 12.48kB / 12.48kB 0.2s done
+#13 sha256:a5789fc40e828c4e7467626e3f69ec5dea8e5da22fe660db8ae6d16f777b0bbf 83.90kB / 83.90kB 0.2s done
+#13 extracting sha256:a5789fc40e828c4e7467626e3f69ec5dea8e5da22fe660db8ae6d16f777b0bbf 0.0s done
+#13 extracting sha256:990a9c434e5e0f11549a8d4a41a1991e621b04e30cd63269adbc97b1dc38fd7e done
+#13 extracting sha256:39dc083afc39bd8dc43d456fe7ff7d39292e593bb2769972c11bb2e5f9119386 0.1s done
+#13 extracting sha256:bf7a4185f01524837d19abde915ffde84e64368b250f5b5e9f6f75aea62a11d4 done
+#13 extracting sha256:2780920e5dbfbe103d03a583ed75345306e572ec5a48cb10361f046767d9f29a done
+#13 extracting sha256:7c12895b777bcaa8ccae0605b4de635b68fc32d60fa08f421dc3818bf55ee212 done
+#13 extracting sha256:3214acf345c0cc6bbdb56b698a41ccdefc624a09d6beb0d38b5de0b2303ecaf4 done
+#13 extracting sha256:52630fc75a18675c530ed9eba5f55eca09b03e91bd5bc15307918bbc1a7e7296 done
+#13 extracting sha256:dd64bf2dd177757451a98fcdc999a339c35dee5d9872d8f4dc69c8f3c4dd0112 done
+#13 extracting sha256:b839dfae01f66e15c6a8b63520557ed315bdfe036342fa7a0c537259f10d7a9a done
+#13 extracting sha256:dcaa5a89b0ccda4b283e16d0b4d0891cd93d5fe05c6798f7806781a6a2d84354 done
+#13 extracting sha256:96ed2737ae312e0bc637b40783f7c2f23416cb72ca957aa01855f1614278e64b done
+#13 DONE 0.9s
+
+#14 [agent-innkeeper stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
+#14 resolve docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08 done
+#14 sha256:1a463fda622494417c79241c74384f026ae6d144e6430e553018b58016c93273 1.30kB / 1.30kB 0.0s done
+#14 sha256:b74e8207a1c460b9567a4c7d8cea3e04a020a101a8eea05b8f940ad57cd7bdbb 1.03kB / 1.03kB 0.1s done
+#14 sha256:afd856144bced55789a858ffee0127331e0bfc4a32afd543c318bed8993056e7 496B / 496B 0.1s done
+#14 sha256:1912b692e9ec88bcd6d1dd2e394bddf6e9a57b6bff77239e2a34c0cc214aa065 1.94kB / 1.94kB 0.0s done
+#14 sha256:fe1ee67356bb41b295853ac20397c2d575f02d78831b2662694ba76280db52b7 1.40kB / 1.40kB 0.0s done
+#14 sha256:fbd3843507a78fc47b018a5c80141a34b08efaced12aead36e5da24b6f2d4bf4 996B / 996B 0.0s done
+#14 sha256:d03d9203114930718fd03c317314a915c9eea8016cec51994842ebb00af41eb0 209B / 209B 0.0s done
+#14 sha256:b8fe5c5431860d2cdc5fbbf65368d302e52ffc7f315a684013f8bca097fa7cd4 548B / 548B 0.0s done
+#14 sha256:edb30f568c94b4b307daf5b3caa0cba48cc81709aea38251cc507f32fbee2058 1.98kB / 1.98kB 0.0s done
+#14 sha256:6f2d0570ca8d6c214eb7233e177937d288029f6c7190f9915df399f68d89f3f1 3.27kB / 3.27kB 0.1s done
+#14 sha256:5469f6c01e3baef9e2635cada27119db4812f0442ae60f7dbbf997013cd3489f 128B / 128B 0.0s done
+#14 sha256:3a3a052ca06d00f3a32cda3fcf4f302b0572a977cecc4a81b47c2d0b69fd40d4 116B / 116B 0.0s done
+#14 sha256:b615b4949874c2511662341d50ed6c0c62604946262ca379b222d117af2bf3fb 871.48kB / 871.48kB 0.1s done
+#14 sha256:07263102338753147105b38e9a9f56cfd5e8d9d54619cbaa40416ae4cba2823a 49.82MB / 49.82MB 0.9s done
+#14 sha256:2d561206d703253ed733e9f3942e8e0bc8c1b8329656bba407ac96eeac3fb71f 1.57MB / 1.57MB 0.1s done
+#14 sha256:aee0b5938d2f8c2270a91b92d07cf42859b42c3d74a40f41261e48fa2a3a3f16 16.34MB / 16.34MB 0.2s done
+#14 sha256:1d3de765d24c695cc75472e7365c1e2b1c1d4ec0f37cf62f511ad022e5198bba 866.86kB / 866.86kB 0.1s done
+#14 sha256:2fea04f8abb2526c5d34b0c5fbf727c4e01c3559018816ebf3444c79be2966c4 16.13kB / 16.13kB 0.1s done
+#14 sha256:6abefd5a91f601fc179ae768aecc4160072f84ffe88f19beff39dab8a70bf333 201B / 201B 0.0s done
+#14 sha256:43d3b91264ef2257438e631b28b2682528e101de4e93b5521d951b66ee9c9ba0 16.41MB / 16.41MB 0.2s done
+#14 sha256:65b0c866f6535c9e89a91c2325be161f3a45c9c4af0fcedb1f4e25c4d35b75db 158B / 158B 0.0s done
+#14 sha256:677bf7bd8f94bc7cf7dec79d496d60e875b67f50b2192cf34bd63ff18ef9251b 4.56MB / 4.56MB 0.2s done
+#14 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 50.33MB / 162.46MB 0.8s
+#14 sha256:a05e488f1be99835ac76b75bdd518e5646690bee3267f1bb9a971f5691294f92 751.74kB / 751.74kB 0.1s done
+#14 sha256:716123c20dcaa97a2868470f25677a84522e5175ffd45249b21032942d207f66 371.13kB / 371.13kB 0.1s done
+#14 sha256:a4e6b76c08c0565072cbfa7f68bee2761144264d358203cd67556a0de42c20e4 3.14kB / 3.14kB 0.0s done
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 32.51MB / 510.04MB 0.5s
+#14 sha256:76555754c419d7c16f597d0103baa5d33b556aecb2d799c6e26026f2776fb571 5.89kB / 5.89kB 0.1s done
+#14 sha256:3aa85870fa533e232abe876ece03198b3e43497924af6afc987701a2898a2181 22.97kB / 22.97kB 0.1s done
+#14 sha256:e42154f2669970305a931791b8ef4b0b1f8b699cd116c8411e0c8786a250f31f 115B / 115B 0.0s done
+#14 sha256:8b9c37de7fd2371360bffa38be5414d7d23a904e0b1caa3b7b56bf89cc26117c 243.66kB / 243.66kB 0.1s done
+#14 sha256:e401380cfa10a93cad5c7b39f17fef0cb9a17288ac4294d9a411527bef130784 3.32kB / 3.32kB 0.1s done
+#14 sha256:74f5a125eb63b0156d2700bf9026b453b75456b60977dc11e2e1b945a77a9e48 1.46kB / 1.46kB 0.0s done
+#14 sha256:99f5ef1f4cf52ccfa3735ababa978f3d5d396a67faf02c8c8b76a08782bc0196 6.66kB / 6.66kB 0.1s done
+#14 sha256:9fc23699ab19652129c8aaadf777106532041f6125a5ae460712a5402b36c874 2.81MB / 2.81MB 0.1s done
+#14 sha256:d27d22031241af4460fa5d26a7b063b5318d81640d6502855dc7b0277b2c131b 904.35kB / 904.35kB 0.1s done
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 9.44MB / 302.15MB 0.2s
+#14 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 66.06MB / 162.46MB 0.9s
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 63.93MB / 510.04MB 0.8s
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 28.31MB / 302.15MB 0.3s
+#14 sha256:5abebb0fba5d6d5b00f05c9c64834ffb1d87ac85c99a5e2974dd568e569a95a6 13.63MB / 50.59MB 0.2s
+#14 sha256:5abebb0fba5d6d5b00f05c9c64834ffb1d87ac85c99a5e2974dd568e569a95a6 28.31MB / 50.59MB 0.3s
+#14 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 86.65MB / 162.46MB 1.2s
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 91.23MB / 510.04MB 1.1s
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 54.53MB / 302.15MB 0.6s
+#14 sha256:5abebb0fba5d6d5b00f05c9c64834ffb1d87ac85c99a5e2974dd568e569a95a6 32.51MB / 50.59MB 0.5s
+#14 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 102.76MB / 162.46MB 1.4s
+#14 sha256:5abebb0fba5d6d5b00f05c9c64834ffb1d87ac85c99a5e2974dd568e569a95a6 50.59MB / 50.59MB 0.6s done
+#14 extracting sha256:5abebb0fba5d6d5b00f05c9c64834ffb1d87ac85c99a5e2974dd568e569a95a6
+#14 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 122.68MB / 162.46MB 1.5s
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 117.44MB / 510.04MB 1.4s
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 83.89MB / 302.15MB 0.9s
+#14 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 133.17MB / 162.46MB 1.7s
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 99.61MB / 302.15MB 1.1s
+#14 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 150.99MB / 162.46MB 1.8s
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 150.99MB / 510.04MB 1.7s
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 117.44MB / 302.15MB 1.2s
+#14 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 162.46MB / 162.46MB 2.0s done
 #14 ...
 
-#15 [tavern-core build 4/8] COPY services/tavern-core/go.mod services/tavern-core/go.sum ./services/tavern-core/
-#15 DONE 0.0s
+#9 [tavern-core build 1/6] FROM docker.io/library/golang:1.27-alpine@sha256:eb61c3873c97416fff0116553fff65d67a3549f72e11d9758849a689cdd8b523
+#9 extracting sha256:83d129a974dd319fef9f5f496bf3a04194c14ba0fbf95635c2d5577185dd0b2f 2.1s done
+#9 extracting sha256:c050182f513fb753ca709ec66cab639c3c37a5356e5d597ca81bcddcf2aaee91 done
+#9 extracting sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 done
+#9 DONE 2.9s
 
-#14 [egress stage-1 1/3] FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
-#14 sha256:b839dfae01f66e15c6a8b63520557ed315bdfe036342fa7a0c537259f10d7a9a 351B / 351B 0.1s done
+#14 [agent-innkeeper stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 147.85MB / 302.15MB 1.5s
 #14 ...
 
-#16 [egress build 5/8] RUN cd services/egress && go mod download
-#16 DONE 0.2s
+#15 [agent-dev build 2/6] WORKDIR /src
+#15 DONE 0.2s
 
-#17 [egress build 6/8] COPY runtime/ ./runtime/
+#16 [egress build 3/8] COPY runtime/go.mod runtime/go.sum ./runtime/
+#16 DONE 0.0s
+
+#17 [agent-innkeeper build 3/6] COPY runtime/go.mod runtime/go.sum ./
 #17 DONE 0.0s
 
-#18 [egress build 7/8] COPY services/egress/ ./services/egress/
-#18 DONE 0.0s
+#18 [tavern-core build 3/8] COPY runtime/go.mod runtime/go.sum ./runtime/
+#18 CACHED
 
-#14 [egress stage-1 1/3] FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
-#14 sha256:b839dfae01f66e15c6a8b63520557ed315bdfe036342fa7a0c537259f10d7a9a 351B / 351B 0.1s done
-#14 sha256:96ed2737ae312e0bc637b40783f7c2f23416cb72ca957aa01855f1614278e64b 143.35kB / 143.35kB 0.2s done
-#14 sha256:dcaa5a89b0ccda4b283e16d0b4d0891cd93d5fe05c6798f7806781a6a2d84354 314B / 314B 0.2s done
-#14 sha256:7c12895b777bcaa8ccae0605b4de635b68fc32d60fa08f421dc3818bf55ee212 188B / 188B 0.2s done
-#14 sha256:dd64bf2dd177757451a98fcdc999a339c35dee5d9872d8f4dc69c8f3c4dd0112 80B / 80B 0.1s done
+#19 [tavern-core build 4/8] COPY services/tavern-core/go.mod services/tavern-core/go.sum ./services/tavern-core/
+#19 DONE 0.0s
+
+#20 [egress build 4/8] COPY services/egress/go.mod services/egress/go.sum ./services/egress/
+#20 DONE 0.1s
+
+#14 [agent-innkeeper stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 184.55MB / 510.04MB 2.1s
+#14 extracting sha256:5abebb0fba5d6d5b00f05c9c64834ffb1d87ac85c99a5e2974dd568e569a95a6 0.9s done
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 167.77MB / 302.15MB 1.8s
 #14 ...
 
-#19 [tavern-core build 5/8] RUN cd services/tavern-core && go mod download
-#19 DONE 0.4s
+#21 [egress build 5/8] RUN cd services/egress && go mod download
+#21 DONE 0.3s
 
-#14 [egress stage-1 1/3] FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
-#14 sha256:dd64bf2dd177757451a98fcdc999a339c35dee5d9872d8f4dc69c8f3c4dd0112 80B / 80B 0.1s done
-#14 sha256:52630fc75a18675c530ed9eba5f55eca09b03e91bd5bc15307918bbc1a7e7296 162B / 162B 0.2s done
-#14 sha256:3214acf345c0cc6bbdb56b698a41ccdefc624a09d6beb0d38b5de0b2303ecaf4 123B / 123B 0.2s done
-#14 sha256:2780920e5dbfbe103d03a583ed75345306e572ec5a48cb10361f046767d9f29a 67B / 67B 0.2s done
+#14 [agent-innkeeper stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 212.86MB / 510.04MB 2.4s
 #14 ...
 
-#20 [tavern-core build 6/8] COPY runtime/ ./runtime/
-#20 DONE 0.0s
+#22 [egress build 6/8] COPY runtime/ ./runtime/
+#22 DONE 0.0s
 
-#21 [tavern-core build 7/8] COPY services/tavern-core/ ./services/tavern-core/
-#21 DONE 0.0s
+#23 [egress build 7/8] COPY services/egress/ ./services/egress/
+#23 DONE 0.0s
 
-#14 [egress stage-1 1/3] FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
-#14 sha256:bf7a4185f01524837d19abde915ffde84e64368b250f5b5e9f6f75aea62a11d4 0B / 29.00kB 0.2s
-#14 sha256:39dc083afc39bd8dc43d456fe7ff7d39292e593bb2769972c11bb2e5f9119386 0B / 445.71kB 0.2s
-#14 sha256:990a9c434e5e0f11549a8d4a41a1991e621b04e30cd63269adbc97b1dc38fd7e 12.48kB / 12.48kB 0.2s done
-#14 sha256:a5789fc40e828c4e7467626e3f69ec5dea8e5da22fe660db8ae6d16f777b0bbf 0B / 83.90kB 0.2s
-#14 sha256:bf7a4185f01524837d19abde915ffde84e64368b250f5b5e9f6f75aea62a11d4 29.00kB / 29.00kB 0.3s done
-#14 sha256:39dc083afc39bd8dc43d456fe7ff7d39292e593bb2769972c11bb2e5f9119386 445.71kB / 445.71kB 0.3s done
-#14 sha256:a5789fc40e828c4e7467626e3f69ec5dea8e5da22fe660db8ae6d16f777b0bbf 83.90kB / 83.90kB 0.2s done
-#14 extracting sha256:a5789fc40e828c4e7467626e3f69ec5dea8e5da22fe660db8ae6d16f777b0bbf 0.0s done
-#14 extracting sha256:990a9c434e5e0f11549a8d4a41a1991e621b04e30cd63269adbc97b1dc38fd7e done
-#14 extracting sha256:39dc083afc39bd8dc43d456fe7ff7d39292e593bb2769972c11bb2e5f9119386 0.1s done
-#14 extracting sha256:39dc083afc39bd8dc43d456fe7ff7d39292e593bb2769972c11bb2e5f9119386 0.1s done
-#14 extracting sha256:bf7a4185f01524837d19abde915ffde84e64368b250f5b5e9f6f75aea62a11d4 0.0s done
-#14 extracting sha256:2780920e5dbfbe103d03a583ed75345306e572ec5a48cb10361f046767d9f29a done
-#14 extracting sha256:7c12895b777bcaa8ccae0605b4de635b68fc32d60fa08f421dc3818bf55ee212 done
-#14 extracting sha256:3214acf345c0cc6bbdb56b698a41ccdefc624a09d6beb0d38b5de0b2303ecaf4 done
-#14 extracting sha256:52630fc75a18675c530ed9eba5f55eca09b03e91bd5bc15307918bbc1a7e7296 done
-#14 extracting sha256:dd64bf2dd177757451a98fcdc999a339c35dee5d9872d8f4dc69c8f3c4dd0112 done
-#14 extracting sha256:b839dfae01f66e15c6a8b63520557ed315bdfe036342fa7a0c537259f10d7a9a done
-#14 extracting sha256:dcaa5a89b0ccda4b283e16d0b4d0891cd93d5fe05c6798f7806781a6a2d84354 done
-#14 extracting sha256:96ed2737ae312e0bc637b40783f7c2f23416cb72ca957aa01855f1614278e64b done
-#14 DONE 0.8s
+#14 [agent-innkeeper stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 185.60MB / 302.15MB 2.0s
+#14 ...
 
-#22 [tavern-core build 8/8] RUN cd services/tavern-core && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/tavern-core ./cmd/tavern-core
-#22 ...
+#24 [tavern-core build 5/8] RUN cd services/tavern-core && go mod download
+#24 DONE 0.5s
 
-#23 [egress build 8/8] RUN cd services/egress && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/egress ./cmd/egress
-#23 DONE 12.1s
-
-#22 [tavern-core build 8/8] RUN cd services/tavern-core && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/tavern-core ./cmd/tavern-core
-#22 ...
-
-#24 [egress stage-1 2/3] COPY --from=build /out/egress /egress
-#24 DONE 0.0s
-
-#25 [egress stage-1 3/3] COPY agents/ /agents/
+#25 [tavern-core build 6/8] COPY runtime/ ./runtime/
 #25 DONE 0.0s
 
-#26 [egress] exporting to image
-#26 exporting layers
-#26 exporting layers 0.3s done
-#26 exporting manifest sha256:ab9313ff762c8de682b2861a87567eb2ac57f17c359328b89cb20814b7f53b6c
-#26 exporting manifest sha256:ab9313ff762c8de682b2861a87567eb2ac57f17c359328b89cb20814b7f53b6c 0.0s done
-#26 exporting config sha256:fda4ab966e11b86cdc235d258bc51ebc8f7121e82e2b1f7c5b11c4ad90f5e321 done
-#26 exporting attestation manifest sha256:fdb0d1442d230d5377aa65c1dd518653a402fa693f23d7cd394c56836b4d7572 done
-#26 exporting manifest list sha256:0817741942d671868ce4658b6f049a9a0a451cfb68a0e4f20a7ce63094d1132e done
-#26 naming to docker.io/hireling/egress:local done
-#26 unpacking to docker.io/hireling/egress:local 0.1s done
-#26 DONE 0.4s
+#26 [tavern-core build 7/8] COPY services/tavern-core/ ./services/tavern-core/
+#26 DONE 0.0s
 
-#22 [tavern-core build 8/8] RUN cd services/tavern-core && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/tavern-core ./cmd/tavern-core
-#22 ...
+#14 [agent-innkeeper stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 240.12MB / 510.04MB 2.7s
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 214.96MB / 302.15MB 2.3s
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 277.87MB / 510.04MB 3.0s
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 233.83MB / 302.15MB 2.6s
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 312.48MB / 510.04MB 3.3s
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 259.00MB / 302.15MB 2.9s
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 338.69MB / 510.04MB 3.6s
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 285.21MB / 302.15MB 3.2s
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 381.62MB / 510.04MB 4.1s
+#14 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 302.15MB / 302.15MB 3.4s done
+#14 extracting sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 408.94MB / 510.04MB 4.4s
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 440.00MB / 510.04MB 4.7s
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 468.71MB / 510.04MB 5.0s
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 497.03MB / 510.04MB 5.3s
+#14 ...
 
-#27 [egress] resolving provenance for metadata file
-#27 DONE 0.0s
+#27 [agent-innkeeper build 4/6] RUN go mod download
+#27 DONE 3.2s
 
-#22 [tavern-core build 8/8] RUN cd services/tavern-core && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/tavern-core ./cmd/tavern-core
-#22 DONE 20.7s
+#14 [agent-innkeeper stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 510.04MB / 510.04MB 5.4s done
+#14 ...
 
-#28 [tavern-core stage-1 2/3] COPY --from=build /out/tavern-core /tavern-core
-#28 DONE 0.0s
+#28 [agent-scriptwriter build 5/6] COPY runtime/ ./
+#28 DONE 0.1s
 
-#29 [tavern-core stage-1 3/3] COPY agents/ /agents/
-#29 DONE 0.0s
+#14 [agent-innkeeper stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
+#14 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 510.04MB / 510.04MB 5.4s done
+#14 extracting sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 6.4s done
+#14 extracting sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1
+#14 extracting sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 6.4s done
+#14 extracting sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 done
+#14 extracting sha256:d27d22031241af4460fa5d26a7b063b5318d81640d6502855dc7b0277b2c131b 0.0s done
+#14 extracting sha256:99f5ef1f4cf52ccfa3735ababa978f3d5d396a67faf02c8c8b76a08782bc0196 done
+#14 extracting sha256:9fc23699ab19652129c8aaadf777106532041f6125a5ae460712a5402b36c874 0.1s done
+#14 extracting sha256:74f5a125eb63b0156d2700bf9026b453b75456b60977dc11e2e1b945a77a9e48
+#14 extracting sha256:9fc23699ab19652129c8aaadf777106532041f6125a5ae460712a5402b36c874 0.1s done
+#14 extracting sha256:74f5a125eb63b0156d2700bf9026b453b75456b60977dc11e2e1b945a77a9e48 done
+#14 extracting sha256:e401380cfa10a93cad5c7b39f17fef0cb9a17288ac4294d9a411527bef130784 0.0s done
+#14 extracting sha256:e42154f2669970305a931791b8ef4b0b1f8b699cd116c8411e0c8786a250f31f 0.0s done
+#14 extracting sha256:8b9c37de7fd2371360bffa38be5414d7d23a904e0b1caa3b7b56bf89cc26117c 0.0s done
+#14 extracting sha256:3aa85870fa533e232abe876ece03198b3e43497924af6afc987701a2898a2181 done
+#14 extracting sha256:76555754c419d7c16f597d0103baa5d33b556aecb2d799c6e26026f2776fb571 done
+#14 extracting sha256:a4e6b76c08c0565072cbfa7f68bee2761144264d358203cd67556a0de42c20e4 0.0s done
+#14 extracting sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c
+#14 ...
 
-#30 [tavern-core] exporting to image
-#30 exporting layers
-#30 exporting layers 0.3s done
-#30 exporting manifest sha256:cfe4430c0a8e681d5f33445550cafbac9f9a09e5897ea53c5fe2f2ea68cd72b0 done
-#30 exporting config sha256:4244f20dfb44b5df7a4f2c9ee1443eaed9e26d671d536922f7075c8798b27a18 done
-#30 exporting attestation manifest sha256:2086224283f991d283e3fd204e4ab553e63ac99b9b54e91a30f51c65285a5fce done
-#30 exporting manifest list sha256:2abb3a581d44777cd12193379282f654632927e68d3513da8b437e15f5595526 done
-#30 naming to docker.io/hireling/tavern-core:local done
-#30 unpacking to docker.io/hireling/tavern-core:local 0.1s done
-#30 DONE 0.4s
+#29 [egress build 8/8] RUN cd services/egress && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/egress ./cmd/egress
+#29 ...
 
-#31 [tavern-core] resolving provenance for metadata file
-#31 DONE 0.0s
+#30 [tavern-core build 8/8] RUN cd services/tavern-core && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/tavern-core ./cmd/tavern-core
+#30 ...
 
-#32 [agent-scriptwriter internal] load build definition from Dockerfile
-#32 transferring dockerfile: 1.94kB done
-#32 DONE 0.0s
+#31 [agent-dev build 6/6] RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/hireling ./cmd/hireling
+#31 ...
 
-#33 [agent-innkeeper internal] load build definition from Dockerfile
-#33 transferring dockerfile: 1.94kB done
+#14 [agent-scriptwriter stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
+#14 extracting sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 8.7s done
+#14 extracting sha256:a05e488f1be99835ac76b75bdd518e5646690bee3267f1bb9a971f5691294f92
+#14 extracting sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 8.7s done
+#14 extracting sha256:a05e488f1be99835ac76b75bdd518e5646690bee3267f1bb9a971f5691294f92 0.0s done
+#14 extracting sha256:716123c20dcaa97a2868470f25677a84522e5175ffd45249b21032942d207f66 0.0s done
+#14 extracting sha256:65b0c866f6535c9e89a91c2325be161f3a45c9c4af0fcedb1f4e25c4d35b75db 0.0s done
+#14 extracting sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33
+#14 extracting sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 6.1s done
+#14 extracting sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 6.1s done
+#14 extracting sha256:677bf7bd8f94bc7cf7dec79d496d60e875b67f50b2192cf34bd63ff18ef9251b
+#14 extracting sha256:677bf7bd8f94bc7cf7dec79d496d60e875b67f50b2192cf34bd63ff18ef9251b 0.2s done
+#14 extracting sha256:6abefd5a91f601fc179ae768aecc4160072f84ffe88f19beff39dab8a70bf333
+#14 extracting sha256:677bf7bd8f94bc7cf7dec79d496d60e875b67f50b2192cf34bd63ff18ef9251b 0.2s done
+#14 extracting sha256:6abefd5a91f601fc179ae768aecc4160072f84ffe88f19beff39dab8a70bf333 done
+#14 extracting sha256:2fea04f8abb2526c5d34b0c5fbf727c4e01c3559018816ebf3444c79be2966c4 0.0s done
+#14 extracting sha256:43d3b91264ef2257438e631b28b2682528e101de4e93b5521d951b66ee9c9ba0
+#14 extracting sha256:43d3b91264ef2257438e631b28b2682528e101de4e93b5521d951b66ee9c9ba0 1.5s done
+#14 extracting sha256:43d3b91264ef2257438e631b28b2682528e101de4e93b5521d951b66ee9c9ba0 1.5s done
+#14 extracting sha256:1d3de765d24c695cc75472e7365c1e2b1c1d4ec0f37cf62f511ad022e5198bba 0.0s done
+#14 extracting sha256:2d561206d703253ed733e9f3942e8e0bc8c1b8329656bba407ac96eeac3fb71f 0.0s done
+#14 extracting sha256:aee0b5938d2f8c2270a91b92d07cf42859b42c3d74a40f41261e48fa2a3a3f16
+#14 extracting sha256:aee0b5938d2f8c2270a91b92d07cf42859b42c3d74a40f41261e48fa2a3a3f16 0.3s done
+#14 extracting sha256:3a3a052ca06d00f3a32cda3fcf4f302b0572a977cecc4a81b47c2d0b69fd40d4
+#14 extracting sha256:aee0b5938d2f8c2270a91b92d07cf42859b42c3d74a40f41261e48fa2a3a3f16 0.3s done
+#14 extracting sha256:3a3a052ca06d00f3a32cda3fcf4f302b0572a977cecc4a81b47c2d0b69fd40d4 0.0s done
+#14 extracting sha256:5469f6c01e3baef9e2635cada27119db4812f0442ae60f7dbbf997013cd3489f done
+#14 extracting sha256:07263102338753147105b38e9a9f56cfd5e8d9d54619cbaa40416ae4cba2823a
+#14 extracting sha256:07263102338753147105b38e9a9f56cfd5e8d9d54619cbaa40416ae4cba2823a 2.0s done
+#14 extracting sha256:07263102338753147105b38e9a9f56cfd5e8d9d54619cbaa40416ae4cba2823a 2.0s done
+#14 extracting sha256:b615b4949874c2511662341d50ed6c0c62604946262ca379b222d117af2bf3fb 0.0s done
+#14 extracting sha256:edb30f568c94b4b307daf5b3caa0cba48cc81709aea38251cc507f32fbee2058 0.0s done
+#14 extracting sha256:b8fe5c5431860d2cdc5fbbf65368d302e52ffc7f315a684013f8bca097fa7cd4 0.0s done
+#14 extracting sha256:6f2d0570ca8d6c214eb7233e177937d288029f6c7190f9915df399f68d89f3f1 0.0s done
+#14 extracting sha256:d03d9203114930718fd03c317314a915c9eea8016cec51994842ebb00af41eb0 0.0s done
+#14 ...
+
+#29 [egress build 8/8] RUN cd services/egress && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/egress ./cmd/egress
+#29 DONE 27.3s
+
+#14 [agent-dev stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
+#14 extracting sha256:d03d9203114930718fd03c317314a915c9eea8016cec51994842ebb00af41eb0 0.0s done
+#14 extracting sha256:fe1ee67356bb41b295853ac20397c2d575f02d78831b2662694ba76280db52b7 done
+#14 extracting sha256:fbd3843507a78fc47b018a5c80141a34b08efaced12aead36e5da24b6f2d4bf4 done
+#14 extracting sha256:1912b692e9ec88bcd6d1dd2e394bddf6e9a57b6bff77239e2a34c0cc214aa065 0.0s done
+#14 extracting sha256:b74e8207a1c460b9567a4c7d8cea3e04a020a101a8eea05b8f940ad57cd7bdbb 0.0s done
+#14 ...
+
+#32 [egress stage-1 2/3] COPY --from=build /out/egress /egress
+#32 DONE 0.1s
+
+#14 [agent-dev stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
+#14 extracting sha256:b74e8207a1c460b9567a4c7d8cea3e04a020a101a8eea05b8f940ad57cd7bdbb 0.0s done
+#14 extracting sha256:afd856144bced55789a858ffee0127331e0bfc4a32afd543c318bed8993056e7 0.0s done
+#14 extracting sha256:1a463fda622494417c79241c74384f026ae6d144e6430e553018b58016c93273 0.0s done
+#14 DONE 30.9s
+
+#33 [egress stage-1 3/3] COPY agents/ /agents/
 #33 DONE 0.0s
 
-#34 [agent-dev internal] load build definition from Dockerfile
-#34 transferring dockerfile: 1.94kB done
-#34 DONE 0.0s
+#34 [egress] exporting to image
+#34 exporting layers
+#34 exporting layers 0.4s done
+#34 exporting manifest sha256:f0f69f1c28605d12778b4d60125813209f5fbe77d90d4b3c40e7c7f6d2f1d497 done
+#34 exporting config sha256:8f74ddc871161929146c53c97a0485e5c7fd12fe57d439655465358f17fe9ed7 done
+#34 exporting attestation manifest sha256:80fcbe6a5b99eaba547621497229c45cb8b5c9ef2cd7593034ec1f2d937cade8 done
+#34 exporting manifest list sha256:21e24211ede364336787a79b1fb0a84bc61ecc872f309713e595004286d4c339 done
+#34 naming to docker.io/hireling/egress:local done
+#34 unpacking to docker.io/hireling/egress:local
+#34 unpacking to docker.io/hireling/egress:local 0.3s done
+#34 DONE 0.7s
 
-#3 [agent-scriptwriter internal] load metadata for docker.io/library/golang:1.27-alpine
-#3 DONE 0.0s
+#35 [egress] resolving provenance for metadata file
+#35 DONE 0.0s
 
-#35 [agent-dev internal] load metadata for docker.io/nousresearch/hermes-agent:latest
-#35 DONE 0.4s
+#30 [tavern-core build 8/8] RUN cd services/tavern-core && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/tavern-core ./cmd/tavern-core
+#30 DONE 42.8s
 
-#36 [agent-scriptwriter internal] load .dockerignore
-#36 transferring context: 2B done
-#36 DONE 0.0s
+#31 [agent-dev build 6/6] RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/hireling ./cmd/hireling
+#31 ...
 
-#37 [agent-dev internal] load .dockerignore
-#37 transferring context: 2B done
+#36 [tavern-core stage-1 2/3] COPY --from=build /out/tavern-core /tavern-core
+#36 DONE 0.2s
+
+#31 [agent-dev build 6/6] RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/hireling ./cmd/hireling
+#31 ...
+
+#37 [tavern-core stage-1 3/3] COPY agents/ /agents/
 #37 DONE 0.0s
 
-#38 [agent-innkeeper internal] load .dockerignore
-#38 transferring context: 2B done
-#38 DONE 0.0s
+#38 [tavern-core] exporting to image
+#38 exporting layers
+#38 exporting layers 0.6s done
+#38 exporting manifest sha256:3ff233cbaf8291ebad41c54da1f01f74f3e4dc30256bf20d3f2ec6cabbf42774
+#38 exporting manifest sha256:3ff233cbaf8291ebad41c54da1f01f74f3e4dc30256bf20d3f2ec6cabbf42774 done
+#38 exporting config sha256:a70d91d8e085257f6f59a2a691a0c6ab45ff11de70191fe86688f71ba5859291 done
+#38 exporting attestation manifest sha256:7b6c218c1f65113889a336b0a8b4fd2a01b96292f6168e8487ac211d91d1cd1d done
+#38 exporting manifest list sha256:1d4add4a5e38bbf9ff260bbd3f2af9884cd2590a49f1d2b9d9224ee54d30aa19 done
+#38 naming to docker.io/hireling/tavern-core:local done
+#38 unpacking to docker.io/hireling/tavern-core:local 0.1s done
+#38 DONE 0.7s
 
-#9 [agent-dev build 1/6] FROM docker.io/library/golang:1.27-alpine@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18
-#9 resolve docker.io/library/golang:1.27-alpine@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 0.0s done
-#9 DONE 0.1s
-
-#10 [agent-innkeeper build 2/6] WORKDIR /src
-#10 CACHED
-
-#39 [agent-scriptwriter internal] load build context
-#39 transferring context: 5.03kB done
+#39 [tavern-core] resolving provenance for metadata file
 #39 DONE 0.0s
 
-#40 [agent-dev internal] load build context
-#40 transferring context: 5.03kB done
+#31 [agent-dev build 6/6] RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/hireling ./cmd/hireling
+#31 DONE 44.4s
+
+#40 [agent-innkeeper stage-1 2/4] COPY --from=build /out/hireling /usr/local/bin/hireling
 #40 DONE 0.0s
 
-#41 [agent-innkeeper internal] load build context
-#41 transferring context: 530.41kB done
+#41 [agent-scriptwriter stage-1 3/4] COPY agents/ /agents/
 #41 DONE 0.0s
 
-#42 [agent-scriptwriter build 3/6] COPY runtime/go.mod runtime/go.sum ./
-#42 DONE 0.0s
+#42 [agent-scriptwriter stage-1 4/4] RUN mkdir -p /tavern/shared /opt/data/notes /opt/data/turns && chown -R 10000:10000 /tavern /opt/data
+#42 DONE 0.1s
 
-#43 [agent-scriptwriter stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
-#43 resolve docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08 done
-#43 sha256:afd856144bced55789a858ffee0127331e0bfc4a32afd543c318bed8993056e7 496B / 496B 0.0s done
-#43 sha256:b74e8207a1c460b9567a4c7d8cea3e04a020a101a8eea05b8f940ad57cd7bdbb 1.03kB / 1.03kB 0.0s done
-#43 sha256:1a463fda622494417c79241c74384f026ae6d144e6430e553018b58016c93273 1.30kB / 1.30kB 0.1s done
-#43 sha256:1912b692e9ec88bcd6d1dd2e394bddf6e9a57b6bff77239e2a34c0cc214aa065 1.94kB / 1.94kB 0.1s done
-#43 sha256:fbd3843507a78fc47b018a5c80141a34b08efaced12aead36e5da24b6f2d4bf4 996B / 996B 0.0s done
-#43 sha256:d03d9203114930718fd03c317314a915c9eea8016cec51994842ebb00af41eb0 209B / 209B 0.0s done
-#43 sha256:fe1ee67356bb41b295853ac20397c2d575f02d78831b2662694ba76280db52b7 1.40kB / 1.40kB 0.0s done
-#43 sha256:6f2d0570ca8d6c214eb7233e177937d288029f6c7190f9915df399f68d89f3f1 3.27kB / 3.27kB 0.0s done
-#43 sha256:6f2d0570ca8d6c214eb7233e177937d288029f6c7190f9915df399f68d89f3f1 3.27kB / 3.27kB 0.0s done
-#43 sha256:edb30f568c94b4b307daf5b3caa0cba48cc81709aea38251cc507f32fbee2058 1.98kB / 1.98kB 0.0s done
-#43 sha256:b8fe5c5431860d2cdc5fbbf65368d302e52ffc7f315a684013f8bca097fa7cd4 548B / 548B 0.1s done
-#43 sha256:3a3a052ca06d00f3a32cda3fcf4f302b0572a977cecc4a81b47c2d0b69fd40d4 116B / 116B 0.0s done
-#43 sha256:5469f6c01e3baef9e2635cada27119db4812f0442ae60f7dbbf997013cd3489f 128B / 128B 0.0s done
-#43 sha256:b615b4949874c2511662341d50ed6c0c62604946262ca379b222d117af2bf3fb 0B / 871.48kB 0.2s
-#43 sha256:b615b4949874c2511662341d50ed6c0c62604946262ca379b222d117af2bf3fb 871.48kB / 871.48kB 0.2s done
-#43 sha256:07263102338753147105b38e9a9f56cfd5e8d9d54619cbaa40416ae4cba2823a 17.83MB / 49.82MB 0.3s
-#43 sha256:2d561206d703253ed733e9f3942e8e0bc8c1b8329656bba407ac96eeac3fb71f 1.57MB / 1.57MB 0.1s done
-#43 sha256:aee0b5938d2f8c2270a91b92d07cf42859b42c3d74a40f41261e48fa2a3a3f16 0B / 16.34MB 0.2s
-#43 sha256:aee0b5938d2f8c2270a91b92d07cf42859b42c3d74a40f41261e48fa2a3a3f16 16.34MB / 16.34MB 0.3s done
-#43 sha256:1d3de765d24c695cc75472e7365c1e2b1c1d4ec0f37cf62f511ad022e5198bba 866.86kB / 866.86kB 0.1s done
-#43 sha256:6abefd5a91f601fc179ae768aecc4160072f84ffe88f19beff39dab8a70bf333 201B / 201B 0.0s done
-#43 sha256:43d3b91264ef2257438e631b28b2682528e101de4e93b5521d951b66ee9c9ba0 16.41MB / 16.41MB 0.2s done
-#43 sha256:07263102338753147105b38e9a9f56cfd5e8d9d54619cbaa40416ae4cba2823a 32.51MB / 49.82MB 0.5s
-#43 sha256:43d3b91264ef2257438e631b28b2682528e101de4e93b5521d951b66ee9c9ba0 16.41MB / 16.41MB 0.2s done
-#43 sha256:2fea04f8abb2526c5d34b0c5fbf727c4e01c3559018816ebf3444c79be2966c4 16.13kB / 16.13kB 0.1s done
-#43 sha256:65b0c866f6535c9e89a91c2325be161f3a45c9c4af0fcedb1f4e25c4d35b75db 158B / 158B 0.0s done
-#43 sha256:677bf7bd8f94bc7cf7dec79d496d60e875b67f50b2192cf34bd63ff18ef9251b 4.56MB / 4.56MB 0.2s done
-#43 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 4.19MB / 162.46MB 0.2s
-#43 sha256:716123c20dcaa97a2868470f25677a84522e5175ffd45249b21032942d207f66 371.13kB / 371.13kB 0.1s done
-#43 sha256:a05e488f1be99835ac76b75bdd518e5646690bee3267f1bb9a971f5691294f92 751.74kB / 751.74kB 0.1s done
-#43 sha256:a4e6b76c08c0565072cbfa7f68bee2761144264d358203cd67556a0de42c20e4 3.14kB / 3.14kB 0.0s done
-#43 sha256:07263102338753147105b38e9a9f56cfd5e8d9d54619cbaa40416ae4cba2823a 49.82MB / 49.82MB 0.8s done
-#43 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 17.83MB / 162.46MB 0.3s
-#43 sha256:a4e6b76c08c0565072cbfa7f68bee2761144264d358203cd67556a0de42c20e4 3.14kB / 3.14kB 0.0s done
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 425.98kB / 510.04MB 0.2s
-#43 sha256:76555754c419d7c16f597d0103baa5d33b556aecb2d799c6e26026f2776fb571 5.89kB / 5.89kB 0.1s done
-#43 sha256:07263102338753147105b38e9a9f56cfd5e8d9d54619cbaa40416ae4cba2823a 49.82MB / 49.82MB 0.8s done
-#43 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 32.51MB / 162.46MB 0.5s
-#43 sha256:3aa85870fa533e232abe876ece03198b3e43497924af6afc987701a2898a2181 22.97kB / 22.97kB 0.1s done
-#43 sha256:e42154f2669970305a931791b8ef4b0b1f8b699cd116c8411e0c8786a250f31f 115B / 115B 0.0s done
-#43 sha256:8b9c37de7fd2371360bffa38be5414d7d23a904e0b1caa3b7b56bf89cc26117c 243.66kB / 243.66kB 0.1s done
-#43 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 50.33MB / 162.46MB 0.6s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 32.51MB / 510.04MB 0.5s
-#43 sha256:8b9c37de7fd2371360bffa38be5414d7d23a904e0b1caa3b7b56bf89cc26117c 243.66kB / 243.66kB 0.1s done
-#43 sha256:e401380cfa10a93cad5c7b39f17fef0cb9a17288ac4294d9a411527bef130784 3.32kB / 3.32kB 0.0s done
-#43 sha256:9fc23699ab19652129c8aaadf777106532041f6125a5ae460712a5402b36c874 2.81MB / 2.81MB 0.2s done
-#43 sha256:74f5a125eb63b0156d2700bf9026b453b75456b60977dc11e2e1b945a77a9e48 1.46kB / 1.46kB 0.0s done
-#43 sha256:9fc23699ab19652129c8aaadf777106532041f6125a5ae460712a5402b36c874 2.81MB / 2.81MB 0.2s done
-#43 sha256:99f5ef1f4cf52ccfa3735ababa978f3d5d396a67faf02c8c8b76a08782bc0196 6.66kB / 6.66kB 0.0s done
-#43 sha256:d27d22031241af4460fa5d26a7b063b5318d81640d6502855dc7b0277b2c131b 904.35kB / 904.35kB 0.1s done
-#43 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 66.06MB / 162.46MB 0.8s
-#43 sha256:d27d22031241af4460fa5d26a7b063b5318d81640d6502855dc7b0277b2c131b 904.35kB / 904.35kB 0.1s done
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 4.19MB / 302.15MB 0.2s
-#43 sha256:5abebb0fba5d6d5b00f05c9c64834ffb1d87ac85c99a5e2974dd568e569a95a6 1.05MB / 50.59MB 0.2s
-#43 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 78.64MB / 162.46MB 0.9s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 63.96MB / 510.04MB 0.8s
-#43 sha256:5abebb0fba5d6d5b00f05c9c64834ffb1d87ac85c99a5e2974dd568e569a95a6 16.78MB / 50.59MB 0.3s
-#43 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 92.27MB / 162.46MB 1.1s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 32.51MB / 302.15MB 0.5s
-#43 sha256:5abebb0fba5d6d5b00f05c9c64834ffb1d87ac85c99a5e2974dd568e569a95a6 32.51MB / 50.59MB 0.5s
-#43 sha256:5abebb0fba5d6d5b00f05c9c64834ffb1d87ac85c99a5e2974dd568e569a95a6 45.09MB / 50.59MB 0.6s
+#43 [agent-dev] exporting to image
+#43 exporting layers 0.5s done
+#43 exporting manifest sha256:5bc4e9e3bca0d1a1e74dd9ae1fcaf0842cae0cda535e4e640c4bf9f096493ba1 done
+#43 exporting config sha256:97c4f820487ceda5bf8c0e51ec514636607095d03457410b87ef8278599edc71 done
+#43 exporting attestation manifest sha256:f073b292142cde05c974578261416241cc840d6fd8cfb63743fd12ca2fb12914 0.0s done
+#43 exporting manifest list sha256:2b6d77e4ec9dd854ed29657b7996a3ad53fdbb771e05b39dbe73b28641c8f39d done
+#43 naming to docker.io/hireling/runtime:local done
+#43 unpacking to docker.io/hireling/runtime:local
 #43 ...
 
-#44 [agent-scriptwriter build 4/6] RUN go mod download
-#44 DONE 2.0s
+#44 [agent-innkeeper] exporting to image
+#44 exporting layers 0.5s done
+#44 exporting manifest sha256:0aadc516f27fd820056d513fad727e99755cd9c2bf7d167a6ab29c1f4f3d8b2b done
+#44 exporting config sha256:0c4c7e64dc765c2a12521786dc0c56fd1d136b972b5b7466c0c64dc89bee46c3 done
+#44 exporting attestation manifest sha256:cf439fd1cb97da959ff0eb7cf7c6d86e4a8e5e38607804f9bd04967f4728632b 0.0s done
+#44 exporting manifest list sha256:2abd7e5c81a3cd4351707720a7cbc43ec499007de12babf6e7e7d478b43c5de3 done
+#44 naming to docker.io/hireling/runtime:local done
+#44 ...
 
-#45 [agent-innkeeper build 5/6] COPY runtime/ ./
-#45 DONE 0.1s
+#45 [agent-scriptwriter] exporting to image
+#45 exporting layers 0.5s done
+#45 exporting manifest sha256:22f9ab17a491787700ee890a3700172a98b91cd335dab9882103fb36ab0cb67c done
+#45 exporting config sha256:8c86e18d74e7c71f0970ed1d4eee3ab971d088f02ed12a3b1d8de2ebaac24044 done
+#45 exporting attestation manifest sha256:444bb6927a1df6a96df1ffe3d69bd241d8d7f5af454a02023f1a9855e691820a 0.0s done
+#45 exporting manifest list sha256:4434bab09e78c8f29dc423ca3a227f838e43e35ed0e7d5bbf09a47a06ee45d01 done
+#45 naming to docker.io/hireling/runtime:local done
+#45 ...
 
-#43 [agent-dev stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
-#43 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 133.17MB / 162.46MB 1.5s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 99.61MB / 510.04MB 1.2s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 50.33MB / 302.15MB 0.8s
-#43 sha256:5abebb0fba5d6d5b00f05c9c64834ffb1d87ac85c99a5e2974dd568e569a95a6 50.59MB / 50.59MB 0.6s done
-#43 extracting sha256:5abebb0fba5d6d5b00f05c9c64834ffb1d87ac85c99a5e2974dd568e569a95a6
-#43 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 148.90MB / 162.46MB 1.7s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 66.06MB / 302.15MB 0.9s
-#43 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 162.46MB / 162.46MB 1.8s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 131.07MB / 510.04MB 1.5s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 83.89MB / 302.15MB 1.1s
-#43 sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 162.46MB / 162.46MB 1.8s done
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 99.61MB / 302.15MB 1.2s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 166.72MB / 510.04MB 2.0s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 115.34MB / 302.15MB 1.4s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 133.17MB / 302.15MB 1.5s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 200.28MB / 510.04MB 2.4s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 153.09MB / 302.15MB 1.8s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 169.87MB / 302.15MB 2.0s
-#43 extracting sha256:5abebb0fba5d6d5b00f05c9c64834ffb1d87ac85c99a5e2974dd568e569a95a6 1.3s done
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 233.83MB / 510.04MB 2.7s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 185.60MB / 302.15MB 2.1s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 267.39MB / 510.04MB 3.0s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 203.42MB / 302.15MB 2.4s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 294.65MB / 510.04MB 3.3s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 233.83MB / 302.15MB 2.7s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 330.30MB / 510.04MB 3.6s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 259.00MB / 302.15MB 3.0s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 285.21MB / 302.15MB 3.3s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 363.86MB / 510.04MB 4.2s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 302.15MB / 302.15MB 3.6s
-#43 sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 302.15MB / 302.15MB 3.7s done
-#43 extracting sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 391.12MB / 510.04MB 4.7s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 419.43MB / 510.04MB 5.0s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 448.79MB / 510.04MB 5.3s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 486.54MB / 510.04MB 5.7s
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 510.04MB / 510.04MB 6.1s done
-#43 sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 510.04MB / 510.04MB 6.1s done
-#43 extracting sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 6.3s done
-#43 extracting sha256:3d510beaa9f929679f4b1d818e17866aeb4f95ee1db3305acd8489c2018ca39f 6.3s done
-#43 extracting sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 done
-#43 extracting sha256:d27d22031241af4460fa5d26a7b063b5318d81640d6502855dc7b0277b2c131b 0.0s done
-#43 extracting sha256:99f5ef1f4cf52ccfa3735ababa978f3d5d396a67faf02c8c8b76a08782bc0196 0.0s done
-#43 extracting sha256:9fc23699ab19652129c8aaadf777106532041f6125a5ae460712a5402b36c874 0.1s done
-#43 extracting sha256:9fc23699ab19652129c8aaadf777106532041f6125a5ae460712a5402b36c874 0.1s done
-#43 extracting sha256:74f5a125eb63b0156d2700bf9026b453b75456b60977dc11e2e1b945a77a9e48 done
-#43 extracting sha256:e401380cfa10a93cad5c7b39f17fef0cb9a17288ac4294d9a411527bef130784 done
-#43 extracting sha256:e42154f2669970305a931791b8ef4b0b1f8b699cd116c8411e0c8786a250f31f done
-#43 extracting sha256:8b9c37de7fd2371360bffa38be5414d7d23a904e0b1caa3b7b56bf89cc26117c 0.0s done
-#43 extracting sha256:3aa85870fa533e232abe876ece03198b3e43497924af6afc987701a2898a2181 0.0s done
-#43 extracting sha256:76555754c419d7c16f597d0103baa5d33b556aecb2d799c6e26026f2776fb571 done
-#43 extracting sha256:a4e6b76c08c0565072cbfa7f68bee2761144264d358203cd67556a0de42c20e4 0.0s done
-#43 extracting sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c
-#43 ...
+#44 [agent-innkeeper] exporting to image
+#44 unpacking to docker.io/hireling/runtime:local 23.7s done
+#44 DONE 24.2s
 
-#46 [agent-scriptwriter build 6/6] RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/hireling ./cmd/hireling
-#46 ...
+#45 [agent-scriptwriter] exporting to image
+#45 unpacking to docker.io/hireling/runtime:local 23.7s done
+#45 DONE 24.2s
 
-#43 [agent-innkeeper stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
-#43 extracting sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 9.3s done
-#43 extracting sha256:725b0bc219518b74b5e015c85f30ccfb569f16b0fe104b43e3a5ce16dea9742c 9.3s done
-#43 extracting sha256:a05e488f1be99835ac76b75bdd518e5646690bee3267f1bb9a971f5691294f92 0.0s done
-#43 extracting sha256:716123c20dcaa97a2868470f25677a84522e5175ffd45249b21032942d207f66 0.0s done
-#43 extracting sha256:65b0c866f6535c9e89a91c2325be161f3a45c9c4af0fcedb1f4e25c4d35b75db done
-#43 extracting sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33
-#43 extracting sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 6.3s done
-#43 extracting sha256:32e354127db7db107cbee4d14344f01d8e9fd96f034848ea77df37928cca2e33 6.3s done
-#43 extracting sha256:677bf7bd8f94bc7cf7dec79d496d60e875b67f50b2192cf34bd63ff18ef9251b 0.1s done
-#43 extracting sha256:6abefd5a91f601fc179ae768aecc4160072f84ffe88f19beff39dab8a70bf333 done
-#43 extracting sha256:2fea04f8abb2526c5d34b0c5fbf727c4e01c3559018816ebf3444c79be2966c4 done
-#43 extracting sha256:43d3b91264ef2257438e631b28b2682528e101de4e93b5521d951b66ee9c9ba0
-#43 ...
+#43 [agent-dev] exporting to image
+#43 unpacking to docker.io/hireling/runtime:local 23.7s done
+#43 DONE 24.2s
 
-#46 [agent-innkeeper build 6/6] RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/hireling ./cmd/hireling
-#46 DONE 25.6s
+#46 [agent-innkeeper] resolving provenance for metadata file
+#46 DONE 0.0s
 
-#47 [agent-dev build 6/6] RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/hireling ./cmd/hireling
-#47 CACHED
+#47 [agent-scriptwriter] resolving provenance for metadata file
+#47 DONE 0.0s
 
-#48 [agent-dev build 3/6] COPY runtime/go.mod runtime/go.sum ./
-#48 CACHED
-
-#49 [agent-dev build 4/6] RUN go mod download
-#49 CACHED
-
-#50 [agent-dev build 5/6] COPY runtime/ ./
-#50 CACHED
-
-#51 [agent-dev stage-1 2/4] COPY --from=build /out/hireling /usr/local/bin/hireling
-#51 CANCELED
-
-#52 [agent-innkeeper build 3/6] COPY runtime/go.mod runtime/go.sum ./
-#52 CACHED
-
-#53 [agent-innkeeper build 4/6] RUN go mod download
-#53 CACHED
-
-#54 [agent-innkeeper build 5/6] COPY runtime/ ./
-#54 CACHED
-
-#55 [agent-innkeeper build 6/6] RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/hireling ./cmd/hireling
-#55 CACHED
-
-#56 [agent-innkeeper stage-1 2/4] COPY --from=build /out/hireling /usr/local/bin/hireling
-#56 CANCELED
-
-#43 [agent-innkeeper stage-1 1/4] FROM docker.io/nousresearch/hermes-agent:latest@sha256:276d44685c65c0cb2a25f190b63c65c8906f9dc76486fb1c05ae71b5826bda08
-#43 extracting sha256:43d3b91264ef2257438e631b28b2682528e101de4e93b5521d951b66ee9c9ba0 1.0s done
-#43 extracting sha256:43d3b91264ef2257438e631b28b2682528e101de4e93b5521d951b66ee9c9ba0 1.0s done
-#43 extracting sha256:1d3de765d24c695cc75472e7365c1e2b1c1d4ec0f37cf62f511ad022e5198bba 0.0s done
-#43 extracting sha256:2d561206d703253ed733e9f3942e8e0bc8c1b8329656bba407ac96eeac3fb71f 0.0s done
-#43 extracting sha256:aee0b5938d2f8c2270a91b92d07cf42859b42c3d74a40f41261e48fa2a3a3f16
-#43 extracting sha256:aee0b5938d2f8c2270a91b92d07cf42859b42c3d74a40f41261e48fa2a3a3f16 0.2s done
-#43 extracting sha256:aee0b5938d2f8c2270a91b92d07cf42859b42c3d74a40f41261e48fa2a3a3f16 0.2s done
-#43 extracting sha256:3a3a052ca06d00f3a32cda3fcf4f302b0572a977cecc4a81b47c2d0b69fd40d4 done
-#43 extracting sha256:5469f6c01e3baef9e2635cada27119db4812f0442ae60f7dbbf997013cd3489f done
-#43 extracting sha256:07263102338753147105b38e9a9f56cfd5e8d9d54619cbaa40416ae4cba2823a
-#43 extracting sha256:07263102338753147105b38e9a9f56cfd5e8d9d54619cbaa40416ae4cba2823a 1.0s done
-#43 extracting sha256:07263102338753147105b38e9a9f56cfd5e8d9d54619cbaa40416ae4cba2823a 1.0s done
-#43 extracting sha256:b615b4949874c2511662341d50ed6c0c62604946262ca379b222d117af2bf3fb 0.0s done
-#43 extracting sha256:edb30f568c94b4b307daf5b3caa0cba48cc81709aea38251cc507f32fbee2058 done
-#43 extracting sha256:b8fe5c5431860d2cdc5fbbf65368d302e52ffc7f315a684013f8bca097fa7cd4 done
-#43 extracting sha256:6f2d0570ca8d6c214eb7233e177937d288029f6c7190f9915df399f68d89f3f1 done
-#43 extracting sha256:d03d9203114930718fd03c317314a915c9eea8016cec51994842ebb00af41eb0 done
-#43 extracting sha256:fe1ee67356bb41b295853ac20397c2d575f02d78831b2662694ba76280db52b7 done
-#43 extracting sha256:fbd3843507a78fc47b018a5c80141a34b08efaced12aead36e5da24b6f2d4bf4 done
-#43 extracting sha256:1912b692e9ec88bcd6d1dd2e394bddf6e9a57b6bff77239e2a34c0cc214aa065 done
-#43 extracting sha256:b74e8207a1c460b9567a4c7d8cea3e04a020a101a8eea05b8f940ad57cd7bdbb done
-#43 extracting sha256:afd856144bced55789a858ffee0127331e0bfc4a32afd543c318bed8993056e7 done
-#43 extracting sha256:1a463fda622494417c79241c74384f026ae6d144e6430e553018b58016c93273 done
-#43 DONE 29.6s
-
-#57 [agent-innkeeper stage-1 2/4] COPY --from=build /out/hireling /usr/local/bin/hireling
-#57 DONE 0.3s
-
-#58 [agent-innkeeper stage-1 3/4] COPY agents/ /agents/
-#58 DONE 0.0s
-
-#59 [agent-innkeeper stage-1 4/4] RUN mkdir -p /tavern/shared /opt/data/notes /opt/data/turns && chown -R 10000:10000 /tavern /opt/data
-#59 DONE 0.1s
-
-#60 [agent-scriptwriter] exporting to image
-#60 exporting layers
-#60 exporting layers 0.5s done
-#60 exporting manifest sha256:192318e5cf046f9413d61757a64d0dcb50b19ff11ce20bb05971c29e7e2a335e done
-#60 exporting config sha256:deecaf676cb94742b1a36a59bd79b33d673f13ca5120433962ae9fdb4c97e4f7 done
-#60 exporting attestation manifest sha256:a3ce7524003231259679f3408547a80d26c22bcb9b1c7b7e93d428f3fa32b653 done
-#60 exporting manifest list sha256:1142e82a3d4976c77ff4d0ff3360a4e8af13e6e0e6109420e0b29c883e39cd02 done
-#60 naming to docker.io/hireling/runtime:local done
-#60 unpacking to docker.io/hireling/runtime:local
-#60 unpacking to docker.io/hireling/runtime:local 0.1s done
-#60 DONE 0.6s
-
-#61 [agent-dev] exporting to image
-#61 exporting layers 0.5s done
-#61 exporting manifest sha256:7805a1f2272cc1c8cb1c7d676b66d0c53ca206f39576122e64912a311a1b6bf3 done
-#61 exporting config sha256:38fe5742ec5fc185155f0f6aa9ab0fc8548b4bddd967738b29b8b64044b2d20b done
-#61 exporting attestation manifest sha256:98072d35d468e3ca6d68170500ca5d4d719e0caeebb1dd7642a785b71c890dce done
-#61 exporting manifest list sha256:5eaa32c9b53d279e24814f102b411caefb3562b2e344394f3ac0455ac52cbde5 done
-#61 naming to docker.io/hireling/runtime:local done
-#61 unpacking to docker.io/hireling/runtime:local 0.1s done
-#61 DONE 0.6s
-
-#62 [agent-innkeeper] exporting to image
-#62 exporting layers 0.5s done
-#62 exporting manifest sha256:38d463123555fd31a26102dbe6fe89c4fcf935e222bd6fe4506993fc2a201bd1 done
-#62 exporting config sha256:df0a129a3b85013a9a02ed8c3d56d55312cf659ba4d420723ba0d985607634b1 done
-#62 exporting attestation manifest sha256:0d756bcbf68fd753734f8008ebff2d0633df1cdc7f57689930aa3775cb03a08f done
-#62 exporting manifest list sha256:4ed056c97adc5aa0227d74d19a34bc9bbebeba08e8a7e69dd913e28c2ce13c5d done
-#62 naming to docker.io/hireling/runtime:local done
-#62 unpacking to docker.io/hireling/runtime:local 0.1s done
-#62 DONE 0.6s
-
-#63 [agent-scriptwriter] resolving provenance for metadata file
-#63 DONE 0.0s
-
-#64 [agent-dev] resolving provenance for metadata file
-#64 DONE 0.0s
-
-#65 [agent-innkeeper] resolving provenance for metadata file
-#65 DONE 0.0s
- agent-dev  Built
- agent-innkeeper  Built
- agent-scriptwriter  Built
- egress  Built
- tavern-core  Built
- Network hireling_desk  Creating
- Network hireling_desk  Created
- Network hireling_outside  Creating
- Network hireling_outside  Created
- Network hireling_tavern  Creating
- Network hireling_tavern  Created
- Volume hireling_tavern-dev  Creating
- Volume hireling_tavern-dev  Created
- Volume hireling_tavern-shared  Creating
- Volume hireling_tavern-shared  Created
- Volume hireling_gbrain-tokens  Creating
- Volume hireling_gbrain-tokens  Created
- Volume hireling_tavern-innkeeper  Creating
- Volume hireling_tavern-innkeeper  Created
- Volume hireling_redis-data  Creating
- Volume hireling_redis-data  Created
- Volume hireling_tavern-scriptwriter  Creating
- Volume hireling_tavern-scriptwriter  Created
- Container hireling-egress-1  Creating
- Container hireling-redis-1  Creating
- Container hireling-tavern-init-1  Creating
- Container hireling-tavern-init-1  Created
- Container hireling-redis-1  Created
- Container hireling-tavern-core-1  Creating
- Container hireling-egress-1  Created
- Container hireling-tavern-core-1  Created
- Container hireling-agent-dev-1  Creating
- Container hireling-agent-innkeeper-1  Creating
- Container hireling-agent-scriptwriter-1  Creating
- Container hireling-agent-dev-1  Created
- Container hireling-agent-scriptwriter-1  Created
- Container hireling-agent-innkeeper-1  Created
- Container hireling-redis-1  Starting
- Container hireling-tavern-init-1  Starting
- Container hireling-egress-1  Starting
- Container hireling-redis-1  Started
- Container hireling-redis-1  Waiting
- Container hireling-tavern-init-1  Started
- Container hireling-egress-1  Started
- Container hireling-redis-1  Healthy
- Container hireling-tavern-core-1  Starting
- Container hireling-tavern-core-1  Started
- Container hireling-redis-1  Waiting
- Container hireling-tavern-core-1  Waiting
- Container hireling-egress-1  Waiting
- Container hireling-tavern-init-1  Waiting
- Container hireling-redis-1  Waiting
- Container hireling-tavern-core-1  Waiting
- Container hireling-tavern-core-1  Waiting
- Container hireling-egress-1  Waiting
- Container hireling-tavern-init-1  Waiting
- Container hireling-egress-1  Waiting
- Container hireling-tavern-init-1  Waiting
- Container hireling-redis-1  Waiting
- Container hireling-egress-1  Healthy
- Container hireling-egress-1  Healthy
- Container hireling-tavern-init-1  Exited
- Container hireling-redis-1  Healthy
- Container hireling-egress-1  Healthy
- Container hireling-tavern-init-1  Exited
- Container hireling-redis-1  Healthy
- Container hireling-tavern-init-1  Exited
- Container hireling-redis-1  Healthy
- Container hireling-tavern-core-1  Healthy
- Container hireling-tavern-core-1  Healthy
- Container hireling-agent-dev-1  Starting
- Container hireling-agent-scriptwriter-1  Starting
- Container hireling-tavern-core-1  Healthy
- Container hireling-agent-innkeeper-1  Starting
- Container hireling-agent-scriptwriter-1  Started
- Container hireling-agent-innkeeper-1  Started
- Container hireling-agent-dev-1  Started
-===== STEP compose-up END rc=0 elapsed=70s =====
-
-===== STEP compose-ps START 2026-11-10T18:06:42Z =====
+#48 [agent-dev] resolving provenance for metadata file
+#48 DONE 0.0s
+ Image hireling/egress:local Built 
+ Image hireling/tavern-core:local Built 
+ Image hireling/runtime:local Built 
+ Image hireling/runtime:local Built 
+ Image hireling/runtime:local Built 
+ Network hireling_outside Creating 
+ Network hireling_tavern Creating 
+ Network hireling_desk Creating 
+ Network hireling_tavern Creating 
+ Network hireling_outside Creating 
+ Volume hireling_tavern-shared Creating 
+ Volume hireling_tavern-shared Creating 
+ Volume hireling_tavern-innkeeper Creating 
+ Volume hireling_tavern-innkeeper Creating 
+ Volume hireling_tavern-scriptwriter Creating 
+ Volume hireling_tavern-scriptwriter Creating 
+ Volume hireling_gbrain-tokens Creating 
+ Volume hireling_gbrain-tokens Creating 
+ Volume hireling_redis-data Creating 
+ Volume hireling_redis-data Creating 
+ Network hireling_desk Creating 
+ Volume hireling_tavern-dev Creating 
+ Volume hireling_tavern-dev Creating 
+ Volume hireling_tavern-shared Created 
+ Volume hireling_tavern-shared Created 
+ Volume hireling_redis-data Created 
+ Volume hireling_redis-data Created 
+ Volume hireling_tavern-innkeeper Created 
+ Volume hireling_tavern-innkeeper Created 
+ Volume hireling_tavern-scriptwriter Created 
+ Volume hireling_tavern-scriptwriter Created 
+ Volume hireling_gbrain-tokens Created 
+ Volume hireling_gbrain-tokens Created 
+ Volume hireling_tavern-dev Created 
+ Volume hireling_tavern-dev Created 
+ Network hireling_outside Created 
+ Network hireling_outside Created 
+ Network hireling_desk Created 
+ Network hireling_desk Created 
+ Network hireling_tavern Created 
+ Network hireling_tavern Created 
+ Container hireling-egress-1 Creating 
+ Container hireling-tavern-init-1 Creating 
+ Container hireling-redis-1 Creating 
+ Container hireling-tavern-init-1 Created 
+ Container hireling-egress-1 Created 
+ Container hireling-redis-1 Created 
+ Container hireling-tavern-core-1 Creating 
+ Container hireling-tavern-core-1 Created 
+ Container hireling-agent-innkeeper-1 Creating 
+ Container hireling-agent-scriptwriter-1 Creating 
+ Container hireling-agent-dev-1 Creating 
+ Container hireling-agent-innkeeper-1 Created 
+ Container hireling-agent-scriptwriter-1 Created 
+ Container hireling-agent-dev-1 Created 
+ Container hireling-egress-1 Starting 
+ Container hireling-tavern-init-1 Starting 
+ Container hireling-redis-1 Starting 
+ Container hireling-egress-1 Started 
+ Container hireling-egress-1 Waiting 
+ Container hireling-tavern-init-1 Started 
+ Container hireling-tavern-init-1 Waiting 
+ Container hireling-redis-1 Started 
+ Container hireling-redis-1 Waiting 
+ Container hireling-tavern-init-1 Exited 
+ Container hireling-egress-1 Healthy 
+ Container hireling-redis-1 Healthy 
+ Container hireling-tavern-core-1 Starting 
+ Container hireling-tavern-core-1 Started 
+ Container hireling-tavern-core-1 Waiting 
+ Container hireling-tavern-core-1 Healthy 
+ Container hireling-agent-innkeeper-1 Starting 
+ Container hireling-agent-scriptwriter-1 Starting 
+ Container hireling-agent-dev-1 Starting 
+ Container hireling-agent-innkeeper-1 Started 
+ Container hireling-agent-scriptwriter-1 Started 
+ Container hireling-agent-dev-1 Started 
+===== STEP compose-up END rc=0 elapsed=94s =====
+===== STEP compose-ps START 2026-11-10T18:49:29Z =====
 NAME                            IMAGE                        COMMAND                  SERVICE              CREATED          STATUS                      PORTS
-hireling-agent-dev-1            hireling/runtime:local       "/opt/hermes/docker/…"   agent-dev            16 seconds ago   Up Less than a second       
-hireling-agent-innkeeper-1      hireling/runtime:local       "/opt/hermes/docker/…"   agent-innkeeper      16 seconds ago   Up Less than a second       
-hireling-agent-scriptwriter-1   hireling/runtime:local       "/opt/hermes/docker/…"   agent-scriptwriter   16 seconds ago   Up Less than a second       
-hireling-egress-1               hireling/egress:local        "/egress"                egress               16 seconds ago   Up 16 seconds (healthy)     3128/tcp
-hireling-redis-1                redis:7-alpine               "docker-entrypoint.s…"   redis                16 seconds ago   Up 16 seconds (healthy)     6379/tcp
-hireling-tavern-core-1          hireling/tavern-core:local   "/tavern-core"           tavern-core          16 seconds ago   Up 5 seconds (healthy)      127.0.0.1:8080->8080/tcp
-hireling-tavern-init-1          busybox:1.37                 "sh -c 'chown -R 100…"   tavern-init          16 seconds ago   Exited (0) 16 seconds ago   
-===== STEP compose-ps END rc=0 elapsed=0s =====
-
-===== STEP healthz START 2026-11-10T18:06:42Z =====
-HTTP 200 body={"agents":["dev","innkeeper","paid-traffic","scriptwriter","social-media","test"],"status":"ok"}
+hireling-agent-dev-1            hireling/runtime:local       "/opt/hermes/docker/…"   agent-dev            17 seconds ago   Up Less than a second       
+hireling-agent-innkeeper-1      hireling/runtime:local       "/opt/hermes/docker/…"   agent-innkeeper      17 seconds ago   Up Less than a second       
+hireling-agent-scriptwriter-1   hireling/runtime:local       "/opt/hermes/docker/…"   agent-scriptwriter   17 seconds ago   Up Less than a second       
+hireling-egress-1               hireling/egress:local        "/egress"                egress               18 seconds ago   Up 16 seconds (healthy)     3128/tcp
+hireling-redis-1                redis:7-alpine               "docker-entrypoint.s…"   redis                18 seconds ago   Up 16 seconds (healthy)     6379/tcp
+hireling-tavern-core-1          hireling/tavern-core:local   "/tavern-core"           tavern-core          17 seconds ago   Up 5 seconds (healthy)      127.0.0.1:8080->8080/tcp
+hireling-tavern-init-1          busybox:1.37                 "sh -c 'chown -R 100…"   tavern-init          18 seconds ago   Exited (0) 16 seconds ago   
+===== STEP compose-ps END rc=0 elapsed=1s =====
+===== STEP healthz START 2026-11-10T18:49:30Z =====
+{"agents":["dev","innkeeper","paid-traffic","scriptwriter","social-media","test"],"status":"ok"}
 ===== STEP healthz END rc=0 elapsed=0s =====
 
-===== STEP tavern-page START 2026-11-10T18:06:42Z =====
-title: Tavern
-bytes: 10456
-mentions tavern: True
-HTTP 200
-===== STEP tavern-page END elapsed=0s =====
+===== STEP panel START 2026-11-10T18:49:30Z =====
+HTTP/1.1 200 OK
+Cache-Control: no-cache
+Content-Type: text/html; charset=utf-8
+Date: Tue, 10 Nov 2026 18:49:30 GMT
+Transfer-Encoding: chunked
 
-===== STEP tavern-health START 2026-11-10T18:06:42Z =====
+===== STEP panel END rc=0 elapsed=0s =====
+PANEL_BYTES 10705
+===== STEP tavern-health START 2026-11-10T18:49:30Z =====
 {"agents":["dev","innkeeper","paid-traffic","scriptwriter","social-media","test"],"status":"ok"}
 
 ===== STEP tavern-health END rc=0 elapsed=0s =====
+===== STEP tavern-status-1 START 2026-11-10T18:49:30Z =====
+{"agents":[{"id":"dev","pending":0},{"id":"innkeeper","pending":0},{"id":"paid-traffic","pending":0},{"id":"scriptwriter","pending":0},{"id":"social-media","pending":0},{"id":"test","pending":0}],"at":"2026-11-10T18:49:30.119851885Z","decisions":[],"interactions":[],"quest":null}
 
-===== STEP tavern-status START 2026-11-10T18:06:42Z =====
-{"agents":[{"id":"dev","pending":0},{"id":"innkeeper","pending":0},{"id":"paid-traffic","pending":0},{"id":"scriptwriter","pending":0},{"id":"social-media","pending":0},{"id":"test","pending":0}],"at":"2026-11-10T18:06:43.00465169Z","decisions":[],"interactions":[]}
-
-===== STEP tavern-status END rc=0 elapsed=1s =====
-
-===== STEP tavern-decisions START 2026-11-10T18:06:43Z =====
+===== STEP tavern-status-1 END rc=0 elapsed=0s =====
+===== STEP tavern-decisions START 2026-11-10T18:49:30Z =====
 {"decisions":[]}
 
 ===== STEP tavern-decisions END rc=0 elapsed=0s =====
-
-===== STEP hireling-check START 2026-11-10T18:06:43Z =====
-attempt 1 ok
+===== STEP hireling-check START 2026-11-10T18:49:30Z =====
+2026/11/10 18:49:30 frontdesk: FRONTDESK_ALLOW_HTTP=1; plain http to a non-loopback host is allowed
 profile  innkeeper (front desk agent innkeeper, model deepseek-v4-pro, server local/)
 config   /opt/data/config.yaml
 fallback off (no OPENROUTER_API_KEY or disabled in the profile)
@@ -631,32 +668,17 @@ turns    Hermes API http://127.0.0.1:8642 not answering — turns use hermes cha
 latency  no measured turn today
 frontdesk  ok (queue readable)
 ===== STEP hireling-check END rc=0 elapsed=0s =====
+===== STEP order START 2026-11-10T18:49:30Z =====
+{"command":{"id":"c-f3934f46058b","agent":"innkeeper","text":"Plan a launch post and a 60-second video script for our new feature, due Friday","at":"2026-11-10T18:49:30.384677258Z"}}
 
-===== STEP tavern-order START 2026-11-10T18:06:43Z =====
-{"command":{"id":"c-803142a1e04e","agent":"innkeeper","text":"Plan a launch post for our new feature, due Friday","at":"2026-11-10T18:06:43.22292312Z"}}
+===== STEP order END rc=0 elapsed=0s =====
+===== STEP tavern-status-2 START 2026-11-10T18:49:30Z =====
+{"agents":[{"id":"dev","pending":0},{"id":"innkeeper","pending":1},{"id":"paid-traffic","pending":0},{"id":"scriptwriter","pending":0},{"id":"social-media","pending":0},{"id":"test","pending":0}],"at":"2026-11-10T18:49:30.393089252Z","decisions":[],"interactions":[],"quest":null}
 
-===== STEP tavern-order END rc=0 elapsed=0s =====
-
-===== STEP tavern-status-after START 2026-11-10T18:06:51Z =====
-{"agents":[{"id":"dev","pending":0},{"id":"innkeeper","turn":{"agent":"innkeeper","phase":"start","with":"owner","topic":"Plan a launch post for our new feature, due Friday","screen":"code","server":"local","at":"2026-11-10T18:06:45.201326217Z"},"pending":0},{"id":"paid-traffic","pending":0},{"id":"scriptwriter","pending":0},{"id":"social-media","pending":0},{"id":"test","pending":0}],"at":"2026-11-10T18:06:51.235607639Z","decisions":[],"interactions":[]}
-
-===== STEP tavern-status-after END rc=0 elapsed=0s =====
-
-===== STEP agent-log-scan START =====
-https refusal count: 0
-command lines: 1
-frontdesk error lines: 0
-===== STEP agent-log-scan END =====
-
-PS_FINAL
-NAME                            IMAGE                        COMMAND                  SERVICE              CREATED          STATUS                      PORTS
-hireling-agent-dev-1            hireling/runtime:local       "/opt/hermes/docker/…"   agent-dev            25 seconds ago   Up 8 seconds                
-hireling-agent-innkeeper-1      hireling/runtime:local       "/opt/hermes/docker/…"   agent-innkeeper      25 seconds ago   Up 8 seconds                
-hireling-agent-scriptwriter-1   hireling/runtime:local       "/opt/hermes/docker/…"   agent-scriptwriter   25 seconds ago   Up 8 seconds                
-hireling-egress-1               hireling/egress:local        "/egress"                egress               25 seconds ago   Up 24 seconds (healthy)     3128/tcp
-hireling-redis-1                redis:7-alpine               "docker-entrypoint.s…"   redis                25 seconds ago   Up 24 seconds (healthy)     6379/tcp
-hireling-tavern-core-1          hireling/tavern-core:local   "/tavern-core"           tavern-core          25 seconds ago   Up 14 seconds (healthy)     127.0.0.1:8080->8080/tcp
-hireling-tavern-init-1          busybox:1.37                 "sh -c 'chown -R 100…"   tavern-init          25 seconds ago   Exited (0) 24 seconds ago   
-END 2026-11-10T18:06:51Z
-TOTAL_ELAPSED 79s
-DONE
+===== STEP tavern-status-2 END rc=0 elapsed=0s =====
+CLOCK_END 2026-11-10T18:49:30Z elapsed=95s
+IMAGES_AFTER 5
+FRONTDESK_HTTPS_LINES 0
+FRONTDESK_ERR_LINES 0
+ALLOW_HTTP_LOG 0
+TIMING_WRAPPER_RC=0

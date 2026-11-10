@@ -1,65 +1,73 @@
 # Quickstart clean run
 
-Record of running the self-host quickstart from the README on a Linux machine with Docker and no prior Hireling state. The complete log of the successful run is [quickstart-run.log](quickstart-run.log). No real API key, token or password is in that log. `.env` was created by `./scripts/init-env.sh` during the run and was not committed.
+Record of the first clean run of the self-host quickstart (`docs/getting-started/quickstart.md`) on Linux with Docker. The log is [quickstart-run.log](quickstart-run.log). No real API key, token or password is in that log. `.env` was created by `./scripts/init-env.sh` during the run and was not committed.
+
+This replaces the earlier **79s** figure. That number was a later run on the same day (2026-11-10T18:05:32Z to 18:06:51Z) that reused base images already on disk and a firewall that had already been fixed. It was not a first run from zero images.
 
 ## Machine
 
-- Linux 6.12, x86_64, Docker Engine 29.1.3, Compose v2.40.3.
-- Before the successful run: no `.env`, no `hireling/*` images, no Hireling volumes, and the Compose build cache removed (`docker builder prune -af`).
-- Upstream images already on disk were reused (golang, redis, busybox, and Hermes layers still in the containerd store). The first attempt, below, started from zero local images and did pull them.
+- 2026-11-10. Linux 6.12.113+ x86_64, Ubuntu 24.04.5. Docker Engine 29.9.3, Compose v5.7.0. `iptables` is `iptables v1.8.10 (nf_tables)`.
+- Clone of commit `7e940446ec4debf7b89fb17ab16d9ef1a49d11dd`, tree `181a24f491faa0ab2b7b3fee2532822e27da939f`, in `/tmp/qs-clean` (`git clone` of that commit, not a dirty tree).
+- Before the clock: `docker system prune -af --volumes` and `docker builder prune -af`. `docker images` listed nothing (`IMAGES_BEFORE 0`). The builder cache reported `Total: 0B`.
+- The key was a placeholder written by a non-interactive stand-in for `${EDITOR:-nano} .env`. A real DeepSeek key was not used. That is enough to boot and accept an order; the model turn itself cannot succeed.
 
-The key was a placeholder written by a non-interactive stand-in for `${EDITOR:-nano} .env`. A real DeepSeek key was not used. That is enough to boot the tavern and accept an order; the model turn itself cannot succeed.
+## Firewall, before the clock
 
-## Successful run
+`iptables-legacy` `FORWARD` policy was `DROP`, and `iptables --version` reported `nf_tables`. On a user-defined bridge (the same shape as a Compose network, not `docker0`), `ping` between two containers lost 100% of packets.
 
-Wall clock from `./scripts/init-env.sh` through the post-order status: **79s** (2026-11-10T18:05:32Z to 2026-11-10T18:06:51Z).
+`./scripts/preflight.sh` exited 1 and printed the current chain and this command (it does not apply the command itself):
+
+```text
+preflight: iptables-legacy FORWARD policy is DROP.
+Docker's iptables command is the nft backend (iptables --version says nf_tables).
+Compose networks use bridges named br-*, not docker0. Packets between containers miss the legacy docker0 rules and hit this DROP, so tavern-core cannot dial Redis (dial tcp …:6379: i/o timeout) and the first docker compose up exits 1.
+
+This does not turn the firewall off. Docker's nftables rules stay in place and still filter forwarded traffic. The command adds one ACCEPT on the unused legacy table, only for interfaces named br-* (Compose bridges), and only if that rule is missing. It does not flush rules, does not change the FORWARD policy, does not touch INPUT or OUTPUT, does not touch iptables-nft, and does not stop ufw or firewalld.
+
+Current iptables-legacy FORWARD:
+-P FORWARD DROP
+-A FORWARD -j DOCKER-USER
+-A FORWARD -j DOCKER-FORWARD
+
+Inspect the table Docker programs, then apply the one command and run this script again (it must exit 0 before docker compose up):
+  sudo iptables-nft -S FORWARD
+  sudo iptables-legacy -C FORWARD -i br+ -o br+ -j ACCEPT 2>/dev/null || sudo iptables-legacy -I FORWARD 1 -i br+ -o br+ -j ACCEPT
+```
+
+That command was run. Policy stayed `DROP`. nft `FORWARD` was not modified. The legacy chain gained one rule, `-A FORWARD -i br+ -o br+ -j ACCEPT`, inserted at the top. The same ping then received a reply (0% loss). `./scripts/preflight.sh` exited 0:
+
+```text
+preflight: ok (iptables-legacy FORWARD is DROP, and br+ to br+ is already accepted)
+```
+
+The timed run below started only after that. No further firewall change was made during the clock.
+
+## Timed run
+
+Wall clock from `./scripts/init-env.sh` through the post-order `./bin/tavern status`: **95s** (2026-11-10T18:47:55Z to 2026-11-10T18:49:30Z).
 
 | Step | Result | Time |
 | --- | --- | --- |
 | `./scripts/init-env.sh` | exit 0, tokens written, values not printed | 0s |
-| `${EDITOR:-nano} .env` | exit 0, placeholder `DEEPSEEK_API_KEY` | 0s |
-| `docker compose up -d --build` | exit 0 | 70s |
-| `docker compose ps -a` | redis, tavern-core, egress healthy; tavern-init exited 0; three agents up | 0s |
+| `${EDITOR:-nano} .env` | exit 0, placeholder `DEEPSEEK_API_KEY` (non-interactive stand-in; value not printed) | 0s |
+| `./scripts/preflight.sh` | exit 0, `br+` already accepted | 0s |
+| `docker compose up -d --build` | exit 0, from zero images and an empty builder cache | 94s |
+| `docker compose ps -a` | redis, tavern-core, egress healthy; tavern-init exited 0; three agents up | 1s |
 | `curl http://127.0.0.1:8080/healthz` | HTTP 200 `{"status":"ok",...}` | 0s |
-| `curl http://127.0.0.1:8080/` | HTTP 200, title `Tavern`, 10456 bytes | 0s |
+| `curl http://127.0.0.1:8080/` | HTTP 200, title `Tavern`, 10705 bytes | 0s |
 | `./bin/tavern health` | same JSON, exit 0 | 0s |
-| `./bin/tavern status` | six agents, no decisions, exit 0 | 1s |
+| `./bin/tavern status` | six agents, `quest` null, no decisions, exit 0 | 0s |
 | `./bin/tavern decisions` | `{"decisions":[]}`, exit 0 | 0s |
-| `docker compose exec -u hermes agent-innkeeper hireling check` | exit 0, `frontdesk  ok (queue readable)`, ledger off (brain profile not on) | 0s |
-| `./bin/tavern order innkeeper "…"` | exit 0, command `c-803142a1e04e` accepted | 0s |
-| `./bin/tavern status` again | Innkeeper turn phase `start` on that order | 0s |
+| `docker compose exec -u hermes agent-innkeeper hireling check` | exit 0, `frontdesk  ok (queue readable)`, ledger off, and one log line `FRONTDESK_ALLOW_HTTP=1; plain http to a non-loopback host is allowed` | 0s |
+| `./bin/tavern order innkeeper "…"` | exit 0, command `c-f3934f46058b` accepted | 0s |
+| `./bin/tavern status` again | Innkeeper `pending` 1 on that order; `quest` still null | 0s |
 
-Compose printed one warning and continued: `Docker Compose is configured to build using Bake, but buildx isn't installed`. The build used the default docker driver.
+The status in that same second still had the order queued (`pending` 1), not yet in phase `start`. A later read, outside the 95s, showed the Innkeeper turn in phase `start` with that topic; the turn's `at` is 2026-11-10T18:49:32Z.
 
-Agent logs after the order: **0** lines containing `FRONTDESK_URL must be https://`, **0** `frontdesk:` errors, and the command was picked up.
+`docker compose up` did not need a second invocation. There was no hidden manual step during the clock.
 
-## Failures on the way
+Agent logs after the order: **0** lines containing `FRONTDESK_URL must be https://`. The three `frontdesk:` lines are the startup notice that `FRONTDESK_ALLOW_HTTP=1`, one per hireling.
 
-### 1. `$EDITOR .env` with `EDITOR` unset
+## Owner panel
 
-- Step: the previous README line `$EDITOR .env`, run in `bash -lc`.
-- Result: exit 127, `bash: line 1: .env: command not found`, about 1s.
-- Cause: an unset `EDITOR` expands to nothing, so the shell executes `.env`.
-- Fix: README and the quickstart now use `${EDITOR:-nano} .env`, and the troubleshooting table says to use `vi .env` when nano is missing.
-
-### 2. `docker compose up` left tavern-core unhealthy
-
-- Step: first `docker compose up -d --build` on this machine, from zero images. The image build itself finished.
-- Result: exit 1 after 141s. `dependency failed to start: container hireling-tavern-core-1 is unhealthy`. redis and egress were healthy, tavern-init had exited 0, and the three agents stayed in `Created`. `hireling check` then failed in 0s with `service "agent-innkeeper" is not running`.
-- Cause: not the Compose file. This machine had both iptables backends. `iptables-nft` accepted traffic on the Compose bridge, and `iptables-legacy` had `FORWARD` policy `DROP` with an accept only for `docker0`. Container-to-container packets on the tavern network were dropped, so tavern-core logged `dial tcp 172.18.0.3:6379: i/o timeout` while `redis-cli ping` inside the redis container returned `PONG`. Host-to-container still worked, which is why the published port reset connections instead of refusing them.
-- Fix on this machine only: flush the stale `iptables-legacy` filter and nat tables so the nft rules are the only filter. A normal Docker Engine install has one backend; the quickstart troubleshooting table describes the symptom. No Compose change.
-
-After that flush, a later curl got HTTP 200 from `/healthz` (the wait loop in the first attempt reached it on try 18, 101s after the failed up, once the daemon could dial Redis). The agents were still not started, because Compose had already given up.
-
-### 3. Hirelings refused the Front Desk URL
-
-- Step: `docker compose up -d` after the firewall fix, then `docker compose logs agent-innkeeper`.
-- Result: containers stayed up, and every poll logged `frontdesk: FRONTDESK_URL must be https://`. `hireling check` could not report `frontdesk ok`.
-- Cause: Compose sets `FRONTDESK_URL=http://tavern-core:8080`. The runtime client allowed plain `http://` only for the prefixes `http://127.0.0.1` and `http://localhost`, so the internal DNS name was rejected and the hireling never read the queue. The Tavern MCP server already had `FRONTDESK_ALLOW_HTTP=1` for this case; the runtime did not.
-- Fix: the runtime parses the URL, allows loopback IPs (`127.0.0.1`, `::1`) without the flag, and allows any other `http://` host only when `FRONTDESK_ALLOW_HTTP=1`. Compose sets that flag next to the internal URL. The name `localhost` is no longer treated as loopback. The clean run above is after this fix.
-
-## GBrain
-
-The default quickstart does not start GBrain. `hireling check` reports the ledger off until the `brain` profile is on, which also needs a git repository. That is expected.
-
-The image does build. On this machine `docker build -f services/gbrain/Dockerfile -t hireling/gbrain:local .` exited 0 and printed `gbrain 0.60.474.0`. CI's image job and the release workflow both build it now. Neither pushes it.
+With the owner token and no quest, the page at `http://127.0.0.1:8080/` showed `no quest set yet`, the party (including the Innkeeper's order), and `no open decisions`. It did not show `could not read the tavern`. Chromium recorded 0 console errors, 0 warnings and 0 page errors at 1440×900 and at 390×844, including a second refresh after 5 seconds. One verbose console note remained: the password field is not inside a form.
