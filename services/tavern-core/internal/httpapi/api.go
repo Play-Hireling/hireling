@@ -14,7 +14,7 @@
 //	GET  /autonomy?day=&agent=&limit= the Autonomy Log (D4): who, what, why, outcome, turn cost
 //	POST /asks                        D11: before a card opens — yours (send it back) | joined (open card on the task) | ask
 //	POST /asks/opened                 the card the runtime opened (one per task)
-//	POST /asks/answer                 the owner's choice → the card's follow-ups and whether they picked the recommendation
+//	POST /asks/answer                 the owner's choice → the card's follow-ups and whether they picked the recommendation (owner bearer, same check as /actions/answer)
 //	GET  /asks?agent=                 open cards and per-hireling counters ("could have decided alone")
 //	GET  /tasks · POST /tasks
 //	POST /tasks/{id}/lease · /renew · /handoff · /finish
@@ -129,7 +129,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /autonomy", s.autonomyLog)
 	mux.HandleFunc("POST /asks", s.preAsk)
 	mux.HandleFunc("POST /asks/opened", s.askOpened)
-	mux.HandleFunc("POST /asks/answer", s.askAnswer)
+	mux.HandleFunc("POST /asks/answer", s.ownerOnly(s.askAnswer))
 	mux.HandleFunc("GET /asks", s.listAsks)
 	mux.HandleFunc("GET /goal", s.getGoal)
 	mux.HandleFunc("PUT /goal", s.ownerOnly(s.setGoal))
@@ -1077,6 +1077,10 @@ func (s *Server) askOpened(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, o)
 }
 
+// askAnswer is POST /asks/answer. ownerOnly (the same helper as
+// /actions/answer) runs first: the Front Desk's IsOwner, a constant-time
+// compare of the Authorization bearer. A query token is never read. An empty
+// owner token does not match.
 func (s *Server) askAnswer(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Decision string `json:"decision"`

@@ -557,6 +557,15 @@ func TestOwnerTokenIsAHeader(t *testing.T) {
 	if got := f3.last(t).Auth; got != "" {
 		t.Fatalf("empty token still sent %q", got)
 	}
+	c3, f4 := serve(t, http.StatusOK, `{"found":true,"card":{"choice":"Yes"}}`)
+	c3.Token = tok
+	if _, err := c3.AskAnswer(context.Background(), "d-1", "Yes"); err != nil {
+		t.Fatal(err)
+	}
+	s = f4.last(t)
+	if s.Path != "/asks/answer" || s.Auth != "Bearer "+tok || strings.Contains(s.Path+s.RawPath+s.Query+string(s.Body), tok) {
+		t.Fatalf("ask answer auth = %q path %s query %q", s.Auth, s.RawPath, s.Query)
+	}
 }
 
 func TestServerDown(t *testing.T) {

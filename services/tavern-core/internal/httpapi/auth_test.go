@@ -1,12 +1,15 @@
 package httpapi
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/Play-Hireling/hireling/runtime/profile"
+	"github.com/Play-Hireling/hireling/services/tavern-core/internal/asks"
+	"github.com/Play-Hireling/hireling/services/tavern-core/internal/frontdesk"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/goal"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/policy"
 	"github.com/Play-Hireling/hireling/services/tavern-core/internal/tasks"
@@ -28,6 +31,7 @@ func TestOwnerTokenOnInternalRoutes(t *testing.T) {
 		Goal:      &goal.Service{Store: goal.NewMemory(), Approver: approver},
 		Grants:    policy.NewMemoryGrants(),
 		Approvals: fakeApprovals{},
+		Asks:      asks.NewMemory(),
 	}
 	srv := listen(s, testOwnerToken)
 	defer srv.Close()
@@ -54,6 +58,7 @@ func TestOwnerTokenOnInternalRoutes(t *testing.T) {
 		{"POST", "/actions/check", `{"action":"draft"}`, 0},
 		{"POST", "/actions/pending", `{"decision":"d","agent":"test","actions":[{"action":"draft"}]}`, 0},
 		{"POST", "/actions/answer", `{"decision":"d","choice":"Approve","agent":"test"}`, 0},
+		{"POST", "/asks/answer", `{"decision":"d-1","choice":"Yes"}`, 0},
 	}
 	for _, r := range probes {
 		for _, tok := range []struct{ label, value string }{{"none", ""}, {"wrong", "wrong-token"}, {"wrong2", "owner-tok-x"}} {
@@ -165,6 +170,162 @@ func TestOwnerTokenOnInternalRoutes(t *testing.T) {
 	if code := call(t, srv, "POST", "/tasks/"+deny.ID+"/deny", "owner", `{}`, nil); code != http.StatusOK {
 		t.Fatalf("deny: %d", code)
 	}
+	if code := call(t, srv, "POST", "/asks/opened", "test", `{"decision":"d-ask","question":"Ship it?","recommended":"Yes"}`, nil); code != http.StatusOK {
+		t.Fatalf("open ask: %d", code)
+	}
+	var answered struct {
+		Found bool `json:"found"`
+	}
+	if code := call(t, srv, "POST", "/asks/answer", "test", `{"decision":"d-ask","choice":"Yes"}`, &answered); code != http.StatusOK || !answered.Found {
+		t.Fatalf("POST /asks/answer: %d found=%v", code, answered.Found)
+	}
+}
+
+// secretTitle is planted on a task. A bypass that returns the board would contain it.
+const secretTitle = "ZZ-SECRET-TASK-TITLE"
+
+// protectedCalls are every route that requires the owner bearer.
+func protectedCalls(taskID string) []struct{ method, path, body string } {
+	task := `{"title":"other","owner":"test","priority":"P3","goal_contribution":{"kind":"leads","expected":1}}`
+	return []struct{ method, path, body string }{
+		{"GET", "/tasks", ""},
+		{"GET", "/tasks/" + taskID, ""},
+		{"POST", "/tasks", task},
+		{"POST", "/tasks/" + taskID + "/lease", `{}`},
+		{"POST", "/tasks/" + taskID + "/renew", `{}`},
+		{"POST", "/tasks/" + taskID + "/handoff", `{"to":"test"}`},
+		{"POST", "/tasks/" + taskID + "/finish", `{"status":"done"}`},
+		{"POST", "/tasks/" + taskID + "/release", `{"status":"queued"}`},
+		{"POST", "/tasks/" + taskID + "/fail", `{"error":"x","max":1}`},
+		{"POST", "/tasks/" + taskID + "/unblock", `{"action":"retry"}`},
+		{"POST", "/tasks/" + taskID + "/approve", `{}`},
+		{"POST", "/tasks/" + taskID + "/deny", `{}`},
+		{"PUT", "/goal", `{"title":"Net","target":1}`},
+		{"POST", "/actions/check", `{"action":"draft"}`},
+		{"POST", "/actions/pending", `{"decision":"d","agent":"test","actions":[{"action":"draft"}]}`},
+		{"POST", "/actions/answer", `{"decision":"d","choice":"Approve","agent":"test"}`},
+		{"POST", "/asks/answer", `{"decision":"d-ask","choice":"Yes"}`},
+	}
+}
+
+// TestProtectedRoutesDoNotBypass: HEAD and OPTIONS without a token do not
+// succeed and do not return the board. A trailing slash does not skip the
+// check. "Authorization: Bearer " (empty token) is 401 while a real owner
+// token is configured.
+func TestProtectedRoutesDoNotBypass(t *testing.T) {
+	p := &profile.Profile{ID: "test", Model: "deepseek-v4-flash"}
+	p.Autonomy.Free = []string{"draft"}
+	approver := func(a string) bool { return a == "owner" }
+	s := &Server{
+		Gate:   policy.New(p),
+		Tasks:  &tasks.Service{Store: tasks.NewMemory(), Approver: approver},
+		Usage:  usage.NewMemory(),
+		Goal:   &goal.Service{Store: goal.NewMemory(), Approver: approver},
+		Grants: policy.NewMemoryGrants(),
+		Asks:   asks.NewMemory(),
+	}
+	srv := listen(s, testOwnerToken)
+	defer srv.Close()
+	var created tasks.Task
+	if code := call(t, srv, "POST", "/tasks", "test", `{"title":"`+secretTitle+`","owner":"test","priority":"P3","goal_contribution":{"kind":"leads","expected":1}}`, &created); code != http.StatusCreated {
+		t.Fatalf("plant: %d", code)
+	}
+	// Do not follow a slash redirect: the status we see is the first response.
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for _, r := range protectedCalls(created.ID) {
+		for _, probe := range []struct{ method, path, auth string }{
+			{http.MethodHead, r.path, ""},
+			{http.MethodOptions, r.path, ""},
+			{r.method, r.path + "/", ""},
+			{r.method, r.path, "Bearer "},
+		} {
+			code, body := doRaw(t, client, srv, probe.method, probe.path, probe.auth, r.body)
+			label := probe.method + " " + probe.path
+			if probe.auth != "" {
+				label += " empty-bearer"
+			}
+			t.Logf("%s -> %d", label, code)
+			if code/100 == 2 {
+				t.Errorf("%s passed without a token: %d body %q", label, code, body)
+			}
+			if strings.Contains(body, secretTitle) {
+				t.Errorf("%s leaked the task: %q", label, body)
+			}
+		}
+	}
+}
+
+// TestEmptyOwnerTokenFailsClosed: FRONTDESK_OWNER_TOKEN empty means IsOwner
+// never matches, including an empty bearer. An empty string does not authenticate.
+func TestEmptyOwnerTokenFailsClosed(t *testing.T) {
+	p := &profile.Profile{ID: "test", Model: "deepseek-v4-flash"}
+	p.Autonomy.Free = []string{"draft"}
+	s := &Server{
+		Gate:  policy.New(p),
+		Tasks: &tasks.Service{Store: tasks.NewMemory()},
+		Usage: usage.NewMemory(),
+		Goal:  &goal.Service{Store: goal.NewMemory()},
+		Asks:  asks.NewMemory(),
+	}
+	desk := &frontdesk.Desk{Agents: []string{"test"}, SharedToken: strings.Repeat("s", 40), OwnerToken: ""}
+	if err := desk.Load(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := desk.Check(); err != nil {
+		t.Fatal(err)
+	}
+	s.Owner = desk.IsOwner
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for _, r := range protectedCalls("T-1") {
+		for _, auth := range []string{"", "Bearer ", "Bearer", "Bearer " + testOwnerToken} {
+			code, body := doRaw(t, client, srv, r.method, r.path, auth, r.body)
+			label := auth
+			if label == "" {
+				label = "none"
+			} else if label == "Bearer " || label == "Bearer" {
+				label = "empty"
+			} else {
+				label = "some-token"
+			}
+			t.Logf("empty-owner %s %s auth=%s -> %d", r.method, r.path, label, code)
+			if code != http.StatusUnauthorized {
+				t.Errorf("%s %s auth=%s: %d, want 401 (body %q)", r.method, r.path, label, code, body)
+			}
+			if strings.Contains(body, secretTitle) || strings.Contains(body, `"title"`) && strings.Contains(body, "tasks") {
+				t.Errorf("%s %s leaked data: %q", r.method, r.path, body)
+			}
+		}
+		q := r.path + "?token="
+		code, body := doRaw(t, client, srv, r.method, q, "", r.body)
+		t.Logf("empty-owner %s %s query-empty -> %d", r.method, r.path, code)
+		if code != http.StatusUnauthorized {
+			t.Errorf("query token %s %s: %d body %q", r.method, q, code, body)
+		}
+	}
+}
+
+func doRaw(t *testing.T, client *http.Client, srv *httptest.Server, method, path, auth, body string) (int, string) {
+	t.Helper()
+	req, err := http.NewRequest(method, srv.URL+path, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method != http.MethodGet && method != http.MethodHead && method != http.MethodOptions {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+	req.Header.Set("X-Hireling", "test")
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(res.Body)
+	return res.StatusCode, string(b)
 }
 
 func rawCall(t *testing.T, srv *httptest.Server, method, path, token, body string) int {

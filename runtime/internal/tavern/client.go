@@ -407,7 +407,8 @@ func (c *Client) AskOpened(ctx context.Context, o OpenAsk) error {
 }
 
 // AskAnswer closes a card with the owner's choice (POST /asks/answer); nil when
-// tavern-core has no card with that id.
+// tavern-core has no card with that id. The owner bearer goes out on
+// Authorization, the same header as /tasks and /actions/*, and is not logged.
 func (c *Client) AskAnswer(ctx context.Context, decision, choice string) (*AnsweredAsk, error) {
 	var out struct {
 		Found bool        `json:"found"`
