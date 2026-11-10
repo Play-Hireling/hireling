@@ -57,6 +57,7 @@ jobs:
           - { name: tavern-core, file: services/tavern-core/Dockerfile }
           - { name: egress, file: services/egress/Dockerfile }
           - { name: ledger-writer, file: services/ledger-writer/Dockerfile }
+          - { name: gbrain, file: services/gbrain/Dockerfile }
     steps:
       - uses: actions/checkout@v7
       - name: docker build

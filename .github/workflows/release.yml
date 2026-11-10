@@ -1,0 +1,146 @@
+# Release images
+#
+# Builds the images a tag would publish to GHCR:
+#   ghcr.io/<owner>/hireling-runtime
+#   ghcr.io/<owner>/hireling-tavern-core
+#   ghcr.io/<owner>/hireling-egress
+#   ghcr.io/<owner>/hireling-ledger-writer
+#   ghcr.io/<owner>/hireling-gbrain
+#
+# Publishing is off. The publish job runs only when ALL of these are true:
+#   1. Someone starts this workflow by hand (workflow_dispatch), and
+#   2. they set the input `publish` to true (the default is false), and
+#   3. the repository variable RELEASE_PUBLISH exists and equals `true`.
+# That variable is not created by this file. A push of a v* tag only builds.
+#
+# To enable publishing later (no workflow edit):
+#   Settings → Secrets and variables → Actions → Variables
+#   Name: RELEASE_PUBLISH    Value: true
+#   Then: Actions → Release images → Run workflow → publish = true.
+# Do not put a token in that variable. The job uses the built-in GITHUB_TOKEN,
+# and only that job has packages: write.
+
+name: Release images
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to GHCR. Ignored unless the repository variable RELEASE_PUBLISH is true."
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.image.name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: runtime, file: runtime/Dockerfile }
+          - { name: tavern-core, file: services/tavern-core/Dockerfile }
+          - { name: egress, file: services/egress/Dockerfile }
+          - { name: ledger-writer, file: services/ledger-writer/Dockerfile }
+          - { name: gbrain, file: services/gbrain/Dockerfile }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Image name and tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository }}-${{ matrix.image.name }}
+          tags: |
+            type=ref,event=tag
+            type=sha,prefix=sha-,format=short
+          flavor: |
+            latest=false
+
+      - name: Build (do not push)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.image.file }}
+          push: false
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
+
+  publish:
+    name: Publish ${{ matrix.image.name }}
+    needs: build
+    # All three gates. vars.RELEASE_PUBLISH is unset until a maintainer creates
+    # it, so this job does not run on a tag push or on a manual run today.
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true' && vars.RELEASE_PUBLISH == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: runtime, file: runtime/Dockerfile }
+          - { name: tavern-core, file: services/tavern-core/Dockerfile }
+          - { name: egress, file: services/egress/Dockerfile }
+          - { name: ledger-writer, file: services/ledger-writer/Dockerfile }
+          - { name: gbrain, file: services/gbrain/Dockerfile }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image name and tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository }}-${{ matrix.image.name }}
+          tags: |
+            type=ref,event=tag
+            type=sha,prefix=sha-,format=short
+          flavor: |
+            latest=false
+
+      - name: Build and push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.image.file }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false

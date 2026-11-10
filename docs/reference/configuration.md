@@ -16,6 +16,7 @@ Everything is configured with environment variables (per service) and the hireli
 | `HIRELING_LONG_POLL` | on | `off` disables the Front Desk long poll |
 | `HIRELING_SERVER`, `HIRELING_REGION` | profile's `home_server` / `region` | Where it runs; reported with every turn (server flag) |
 | `FRONTDESK_URL` | — | Front Desk base URL (`http://tavern-core:8080` in Compose). Unset = no command queue |
+| `FRONTDESK_ALLOW_HTTP` | — | `1` allows `http://` to a host that is not a loopback IP. Compose sets it, because the desk is on the internal network. Leave it unset when the desk is on the public internet (`https://` only; the name `localhost` is not treated as loopback) |
 | `FRONTDESK_TOKEN_<ID>` | — | This hireling's token (`<ID>` = upper-case id, `-` → `_`) |
 | `FRONTDESK_AGENT_TOKEN` | — | Shared token, used when the per-hireling one is unset |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | — | Only when the Front Desk sits behind Cloudflare Access |

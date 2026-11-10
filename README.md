@@ -48,8 +48,11 @@ You need Docker with Compose v2 and a [DeepSeek API key](https://platform.deepse
 ```bash
 git clone https://github.com/Play-Hireling/hireling.git && cd hireling
 ./scripts/init-env.sh                 # creates .env with random Front Desk tokens
-$EDITOR .env                          # paste DEEPSEEK_API_KEY=…
+${EDITOR:-nano} .env                  # set DEEPSEEK_API_KEY=sk-…  (never commit .env)
 docker compose up -d --build          # Innkeeper + Scriptwriter + Dev
+
+curl -fsS http://127.0.0.1:8080/healthz   # {"status":"ok",...}
+# The tavern itself: http://127.0.0.1:8080/
 
 ./bin/tavern order innkeeper "Plan a launch post for our new feature, due Friday"
 ./bin/tavern status                   # who is doing what

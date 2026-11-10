@@ -46,7 +46,14 @@ tavern.example.com {
 git pull && docker compose up -d --build        # rebuild changed images
 ```
 
-Pin releases with `HIRELING_TAG` and tagged images to roll back: `HIRELING_TAG=v0.1.0 docker compose up -d`.
+`HIRELING_TAG` is the local tag Compose puts on every image it builds (`local` when unset). `HIRELING_TAG=v0.1.0 docker compose up -d --build` rebuilds from this tree and tags the result; it does not pull a registry.
+
+Release images are built by [`.github/workflows/release.yml`](../../.github/workflows/release.yml) on a `v*` tag (and from the Actions tab). **Nothing is pushed** until a maintainer turns publishing on. The publish job stays skipped while the repository variable `RELEASE_PUBLISH` does not exist. To enable it later, without changing the workflow:
+
+1. Settings → Secrets and variables → Actions → Variables → New variable: name `RELEASE_PUBLISH`, value `true`.
+2. Actions → Release images → Run workflow, and set **publish** to true.
+
+A tag push still only builds. The images, once published, are `ghcr.io/<owner>/hireling-runtime`, `hireling-tavern-core`, `hireling-egress`, `hireling-ledger-writer` and `hireling-gbrain`, tagged with the git tag. Compose keeps building `hireling/<name>:<HIRELING_TAG>` locally; pointing it at GHCR is a separate change after the first publish.
 
 The Hermes base image is `nousresearch/hermes-agent:latest`; pin it by digest in `runtime/Dockerfile` for reproducible builds.
 

@@ -15,6 +15,7 @@
 //	HERMES_BIN                hermes executable (default: hermes)
 //	HIRELING_SERVER / REGION  where this container runs (default: the profile's home_server / region)
 //	FRONTDESK_URL            http://tavern-core:8080
+//	FRONTDESK_ALLOW_HTTP     "1" allows that plain http URL (Compose sets it; the desk is on the internal network)
 //	FRONTDESK_TOKEN_<ID>     this hireling's front desk token (falls back to FRONTDESK_AGENT_TOKEN)
 //	CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET   optional, when the desk sits behind Cloudflare Access
 //	DEEPSEEK_API_KEY          read by Hermes, never by this program
@@ -344,6 +345,7 @@ func build(logger *log.Logger) (*loop.Loop, error) {
 		Token:          token,
 		CFAccessID:     os.Getenv("CF_ACCESS_CLIENT_ID"),
 		CFAccessSecret: os.Getenv("CF_ACCESS_CLIENT_SECRET"),
+		AllowHTTP:      os.Getenv("FRONTDESK_ALLOW_HTTP") == "1",
 	}
 	// A9: every value named in profile.secrets (plus the Access token) is masked
 	// wherever text leaves the container.
