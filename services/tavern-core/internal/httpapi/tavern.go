@@ -11,7 +11,6 @@ import (
 // tavernSlash sends /tavern to /tavern/ so relative asset URLs in the
 // self-host build (Vite base ”) resolve under the game.
 func (s *Server) tavernSlash(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("X-Hireling-Handler", "tavernSlash")
 	http.Redirect(w, r, "/tavern/", http.StatusPermanentRedirect)
 }
 
@@ -29,7 +28,6 @@ func (s *Server) serveTavern(w http.ResponseWriter, r *http.Request) {
 	// Decoded path. "/tavern/../" cleans to "/" and is not this tree.
 	// An encoded slash stays in the segment, so "/tavern/..%2f" arrives
 	// decoded as "/tavern/../" and takes the same exit.
-	w.Header().Set("X-Hireling-Handler", "serveTavern")
 	// path.Clean drops the trailing slash, so "/tavern/" becomes "/tavern".
 	clean := path.Clean(r.URL.Path)
 	if clean != "/tavern" && !strings.HasPrefix(clean, "/tavern/") {

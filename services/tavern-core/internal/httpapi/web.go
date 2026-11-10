@@ -27,7 +27,6 @@ var clientJS []byte
 // jsonOnly untouched. HTMLSecurity adds the CSP. The page only ever reads
 // /api/* with the owner token, which a self-hoster enters in the page.
 func (s *Server) client(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("X-Hireling-Handler", "client")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)

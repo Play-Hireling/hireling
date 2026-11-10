@@ -154,62 +154,52 @@ func TestCSPMatchesTheHandler(t *testing.T) {
 	srv := httptest.NewServer(s.Handler())
 	defer srv.Close()
 
-	// /tavern/../ is not a clean path. The mux redirects; serveTavern does not run.
+	// /tavern/../ is not a clean path. The mux redirects. The panel CSP is on
+	// that redirect. Identified by status and Location, not by a header.
 	redir := rawRequest(t, srv, "/tavern/../")
-	if redir.csp == TavernContentSecurityPolicy {
-		t.Fatalf("/tavern/../ got the game CSP (status %d location %q handler %s)", redir.status, redir.location, redir.handler)
+	if redir.status/100 != 3 || redir.location != "/" || redir.csp != PanelContentSecurityPolicy {
+		t.Fatalf("/tavern/../ status %d location %q CSP %q", redir.status, redir.location, redir.csp)
 	}
-	if redir.status/100 != 3 && redir.csp != PanelContentSecurityPolicy {
-		t.Fatalf("/tavern/../ status %d CSP %q, want a mux redirect or the panel policy", redir.status, redir.csp)
-	}
-	t.Logf("route /tavern/../ → %s → %s", redir.handler, policyName(redir.csp))
+	t.Logf("route /tavern/../ → mux redirect to %s (status %d) → panel", redir.location, redir.status)
 
-	// Encoded slash. The decoded path cleans out of /tavern/, so this is not a game file.
+	// Encoded slash. The decoded path cleans out of /tavern/, so the body is
+	// the plain 404, never the fixture, and the CSP stays the panel policy.
 	enc := rawRequest(t, srv, "/tavern/..%2f")
-	if enc.csp == TavernContentSecurityPolicy {
-		t.Fatalf("/tavern/..%%2f got the game CSP (status %d body %q handler %s)", enc.status, enc.body, enc.handler)
+	if enc.status != http.StatusNotFound || enc.csp != PanelContentSecurityPolicy || strings.Contains(enc.body, "GAME-") {
+		t.Fatalf("/tavern/..%%2f status %d CSP %q body %q", enc.status, enc.csp, enc.body)
 	}
-	if enc.csp != PanelContentSecurityPolicy && enc.status/100 != 3 {
-		t.Fatalf("/tavern/..%%2f status %d CSP %q, want the panel policy or a mux redirect", enc.status, enc.csp)
-	}
-	t.Logf("route /tavern/..%%2f → %s → %s", enc.handler, policyName(enc.csp))
+	t.Logf("route /tavern/..%%2f → 404 body, no fixture → panel")
 
-	// %74 is 't'. The server decodes it and the handler that matches serves the response.
+	// %74 is 't'. The server decodes it and the fixture index is what comes back.
 	pct := rawRequest(t, srv, "/%74avern/")
-	if pct.handler == "serveTavern" && pct.csp != TavernContentSecurityPolicy {
-		t.Fatalf("%%74avern served by serveTavern with CSP %q", pct.csp)
+	if pct.status != http.StatusOK || !strings.Contains(pct.body, "GAME-INDEX") || pct.csp != TavernContentSecurityPolicy {
+		t.Fatalf("%%74avern status %d CSP %q body %q", pct.status, pct.csp, pct.body)
 	}
-	if pct.handler != "serveTavern" && pct.csp == TavernContentSecurityPolicy {
-		t.Fatalf("%%74avern got the game CSP from %s", pct.handler)
-	}
-	if pct.handler != "serveTavern" && pct.csp != PanelContentSecurityPolicy && pct.status/100 != 3 {
-		t.Fatalf("%%74avern handler %s status %d CSP %q", pct.handler, pct.status, pct.csp)
-	}
-	t.Logf("route /%%74avern/ → %s → %s", pct.handler, policyName(pct.csp))
+	t.Logf("route /%%74avern/ → fixture index.html → game")
 
 	panel := rawRequest(t, srv, "/")
-	if panel.handler != "client" || panel.csp != PanelContentSecurityPolicy {
-		t.Fatalf("/ handler %s CSP %q", panel.handler, panel.csp)
+	if panel.status != http.StatusOK || !strings.Contains(panel.body, `src="/client.js"`) || panel.csp != PanelContentSecurityPolicy {
+		t.Fatalf("/ status %d CSP %q", panel.status, panel.csp)
 	}
-	t.Logf("route / → %s → %s", panel.handler, policyName(panel.csp))
+	t.Logf("route / → panel HTML (client.js) → panel")
 
 	other := rawRequest(t, srv, "/tavernX/")
-	if other.csp != PanelContentSecurityPolicy || other.handler == "serveTavern" {
-		t.Fatalf("/tavernX/ handler %s CSP %q", other.handler, other.csp)
+	if other.status != http.StatusNotFound || other.csp != PanelContentSecurityPolicy || strings.Contains(other.body, "GAME-") {
+		t.Fatalf("/tavernX/ status %d CSP %q body %q", other.status, other.csp, other.body)
 	}
-	t.Logf("route /tavernX/ → %s → %s", other.handler, policyName(other.csp))
+	t.Logf("route /tavernX/ → 404 body, no fixture → panel")
 
 	game := rawRequest(t, srv, "/tavern/")
-	if game.handler != "serveTavern" || game.csp != TavernContentSecurityPolicy || !strings.Contains(game.body, "GAME-INDEX") {
-		t.Fatalf("/tavern/ handler %s CSP %q body %q", game.handler, game.csp, game.body)
+	if game.status != http.StatusOK || game.csp != TavernContentSecurityPolicy || !strings.Contains(game.body, "GAME-INDEX") {
+		t.Fatalf("/tavern/ status %d CSP %q body %q", game.status, game.csp, game.body)
 	}
-	t.Logf("route /tavern/ → %s → %s", game.handler, policyName(game.csp))
+	t.Logf("route /tavern/ → fixture index.html → game")
 
 	asset := rawRequest(t, srv, "/tavern/play.js")
-	if asset.handler != "serveTavern" || asset.csp != TavernContentSecurityPolicy || !strings.Contains(asset.body, "GAME-ASSET") {
-		t.Fatalf("/tavern/play.js handler %s CSP %q body %q", asset.handler, asset.csp, asset.body)
+	if asset.status != http.StatusOK || asset.csp != TavernContentSecurityPolicy || !strings.Contains(asset.body, "GAME-ASSET") {
+		t.Fatalf("/tavern/play.js status %d CSP %q body %q", asset.status, asset.csp, asset.body)
 	}
-	t.Logf("route /tavern/play.js → %s → %s", asset.handler, policyName(asset.csp))
+	t.Logf("route /tavern/play.js → fixture play.js → game")
 }
 
 // JSON from the panel API, outside /tavern/, keeps the headers its handler
@@ -269,7 +259,6 @@ type rawResponse struct {
 	location string
 	csp      string
 	body     string
-	handler  string
 }
 
 // rawRequest sends the target as the request line, so the client does not
@@ -294,18 +283,7 @@ func rawRequest(t *testing.T, srv *httptest.Server, target string) rawResponse {
 		location: res.Header.Get("Location"),
 		csp:      res.Header.Get("Content-Security-Policy"),
 		body:     body,
-		handler:  handlerName(res.Header.Get("X-Hireling-Handler"), res.StatusCode, res.Header.Get("Location")),
 	}
-}
-
-func handlerName(header string, status int, location string) string {
-	if header != "" {
-		return header
-	}
-	if status/100 == 3 {
-		return "mux redirect to " + location
-	}
-	return "mux not found"
 }
 
 func writeFile(t *testing.T, path, body string) {
