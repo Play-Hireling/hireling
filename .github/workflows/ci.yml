@@ -73,7 +73,7 @@ jobs:
           DEEPSEEK_API_KEY: ci
           FRONTDESK_OWNER_TOKEN: ci
           FRONTDESK_AGENT_TOKEN: ci
-        run: docker compose --profile full --profile test --profile brain config --quiet
+        run: docker compose --profile full --profile test --profile brain --profile game config --quiet
 
   hygiene:
     name: Docs, scripts and secrets
@@ -85,7 +85,7 @@ jobs:
       - name: relative links in markdown
         run: python3 scripts/check-links.py
       - name: shellcheck
-        run: shellcheck scripts/init-env.sh scripts/preflight.sh scripts/preflight_test.sh bin/tavern
+        run: shellcheck scripts/init-env.sh scripts/preflight.sh scripts/preflight_test.sh scripts/selfhost-bundle-gate.sh scripts/selfhost-bundle-gate_test.sh scripts/pack-client.sh bin/tavern
       - name: preflight
         run: sh scripts/preflight_test.sh
       - name: gitleaks

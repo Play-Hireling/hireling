@@ -5,11 +5,14 @@ import (
 	"net/http"
 )
 
-// ContentSecurityPolicy is the policy on every HTML response from tavern-core
-// (the owner panel today, /tavern/ when that handler is added). No
-// 'unsafe-inline' and no 'unsafe-eval': scripts and styles are same-origin
-// files. img-src allows the panel's data: favicon.
-const ContentSecurityPolicy = "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+// ContentSecurityPolicy is the policy on every HTML response from tavern-core,
+// including the owner panel and /tavern/. It is the playhireling tavern policy
+// (playhireling #110, head cd6033e072db800a970cd08de810f224f6a2a6b5,
+// packages/assets/public/_headers), not the panel's old style-src 'self'
+// policy. style-src allows 'unsafe-inline' because the game sets style
+// attributes. script-src does not. There is no 'unsafe-eval': Phaser 4.2.1
+// in the self-host build runs without it.
+const ContentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; form-action 'self'"
 
 // HTMLSecurity sets ContentSecurityPolicy, X-Content-Type-Options: nosniff and
 // Referrer-Policy: no-referrer on every response whose Content-Type is
@@ -41,11 +44,21 @@ type htmlHeaderWriter struct {
 	wrote bool
 }
 
+func isJSON(contentType string) bool {
+	mt, _, err := mime.ParseMediaType(contentType)
+	return err == nil && mt == "application/json"
+}
+
 func (w *htmlHeaderWriter) WriteHeader(code int) {
 	if !w.wrote {
 		w.wrote = true
-		if isHTML(w.Header().Get("Content-Type")) {
+		ct := w.Header().Get("Content-Type")
+		if isHTML(ct) {
 			SetHTMLSecurity(w.Header())
+		}
+		// Every JSON response, including 401, gets nosniff from this one wrapper.
+		if isJSON(ct) {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
 		}
 	}
 	w.ResponseWriter.WriteHeader(code)

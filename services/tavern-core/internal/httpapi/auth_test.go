@@ -245,8 +245,23 @@ func TestProtectedRoutesDoNotBypass(t *testing.T) {
 				label += " empty-bearer"
 			}
 			t.Logf("%s -> %d", label, code)
-			if code/100 == 2 {
-				t.Errorf("%s passed without a token: %d body %q", label, code, body)
+			// One code per probe. HEAD follows a registered GET (401 on an
+			// owner GET). A POST-only path is 405. HEAD /goal is the open
+			// GET, and no quest is set yet, so 404.
+			want := http.StatusUnauthorized
+			hasGET := r.method == http.MethodGet || r.path == "/tasks" || (strings.HasPrefix(r.path, "/tasks/") && strings.Count(r.path, "/") == 2)
+			switch {
+			case probe.method == http.MethodOptions:
+				want = http.StatusMethodNotAllowed
+			case strings.HasSuffix(probe.path, "/"):
+				want = http.StatusNotFound
+			case probe.method == http.MethodHead && r.path == "/goal":
+				want = http.StatusNotFound
+			case probe.method == http.MethodHead && !hasGET:
+				want = http.StatusMethodNotAllowed
+			}
+			if code != want {
+				t.Errorf("%s: %d, want %d (body %q)", label, code, want, body)
 			}
 			if strings.Contains(body, secretTitle) {
 				t.Errorf("%s leaked the task: %q", label, body)
@@ -347,4 +362,72 @@ func rawCall(t *testing.T, srv *httptest.Server, method, path, token, body strin
 	}
 	res.Body.Close()
 	return res.StatusCode
+}
+
+// POST /goal/progress, POST /asks, POST /asks/opened and POST /agents/{id}/usage
+// take the same owner bearer as the other owner routes. Each negative probe
+// has one status: 401, 405 or 404. A query token is ignored.
+func TestInternalWritesNeedOwnerToken(t *testing.T) {
+	srv := newServer()
+	defer srv.Close()
+	if code := call(t, srv, "PUT", "/goal", "owner", `{"title":"Net","target":10}`, nil); code != 200 {
+		t.Fatalf("define quest: %d", code)
+	}
+	// Bearer without X-Hireling: owner, and a different case, are 403.
+	// The comparison is exact.
+	if code := call(t, srv, "PUT", "/goal", "", `{"title":"Nope","target":2}`, nil); code != http.StatusForbidden {
+		t.Fatalf("PUT /goal with bearer and no X-Hireling: %d, want 403", code)
+	}
+	for _, who := range []string{"Owner", "OWNER"} {
+		if code := call(t, srv, "PUT", "/goal", who, `{"title":"Nope","target":2}`, nil); code != http.StatusForbidden {
+			t.Fatalf("PUT /goal X-Hireling %q: %d, want 403", who, code)
+		}
+	}
+	turn := `{"command_id":"c-auth","at":"2026-11-03T19:41:00Z","sessions":1,"totals":{"calls":1,"input_tokens":1,"output_tokens":1,"cost_usd":0,"priced":true}}`
+	routes := []struct {
+		path, body string
+		ok         int
+	}{
+		{"/goal/progress", `{"from":"owner","current":1}`, http.StatusOK},
+		{"/asks", `{"agent":"test","question":"Ship?"}`, http.StatusOK},
+		{"/asks/opened", `{"agent":"test","decision":"d-9","question":"Ship?"}`, http.StatusOK},
+		{"/agents/test/usage", turn, http.StatusCreated},
+	}
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for _, r := range routes {
+		head := http.StatusMethodNotAllowed
+		// GET /asks and GET /agents/{id}/usage stay open, so HEAD is that GET.
+		if r.path == "/asks" || r.path == "/agents/test/usage" {
+			head = http.StatusOK
+		}
+		probes := []struct {
+			method, path, auth string
+			want               int
+		}{
+			{http.MethodPost, r.path, "", http.StatusUnauthorized},
+			{http.MethodPost, r.path, "Bearer wrong-token", http.StatusUnauthorized},
+			{http.MethodPost, r.path, "Bearer ", http.StatusUnauthorized},
+			{http.MethodPost, r.path + "?token=" + testOwnerToken, "", http.StatusUnauthorized},
+			{http.MethodHead, r.path, "", head},
+			{http.MethodOptions, r.path, "", http.StatusMethodNotAllowed},
+			{http.MethodPost, r.path + "/", "", http.StatusNotFound},
+			{http.MethodPost, r.path, "Bearer " + testOwnerToken, r.ok},
+		}
+		for _, p := range probes {
+			code, body := doRaw(t, client, srv, p.method, p.path, p.auth, r.body)
+			if code != p.want {
+				t.Errorf("%s %s auth %q: %d, want %d body %q", p.method, p.path, p.auth, code, p.want, body)
+			}
+		}
+		req, _ := http.NewRequest(http.MethodPost, srv.URL+r.path, strings.NewReader(r.body))
+		req.Header.Set("Content-Type", "application/json")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.Header.Get("X-Content-Type-Options") != "nosniff" {
+			t.Errorf("%s 401 missing nosniff", r.path)
+		}
+	}
 }

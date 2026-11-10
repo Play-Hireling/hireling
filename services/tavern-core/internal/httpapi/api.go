@@ -31,11 +31,16 @@
 //	POST /asks/answer                 close a D11 card (ownerOnly only; not Approvals.Confirm)
 //
 // The hirelings send that same bearer from FRONTDESK_OWNER_TOKEN. They still
-// identify themselves with X-Hireling. The other routes (health, agents,
-// usage, POST /asks, POST /asks/opened, GET /asks, autonomy, GET /goal,
-// POST /goal/progress) stay on the Compose network with X-Hireling.
-// POST /asks/answer does not. The Front Desk (/api/*, internal/frontdesk) is
-// mounted on the same server and carries its own bearer tokens.
+// identify themselves with X-Hireling. POST /goal/progress, POST /asks,
+// POST /asks/opened and POST /agents/{id}/usage take that bearer too.
+// GET /goal, GET /asks, GET /agents/*, GET /autonomy and GET usage stay open
+// on the Compose network: they do not mutate, and the port is 127.0.0.1.
+// X-Hireling: owner is case-sensitive (exactly "owner").
+// POST /asks/answer takes the choice from the JSON body. Only the owner
+// bearer may send it. It does not call Approvals.Confirm (that proves a
+// gate grant, which this card is not). The Front Desk (/api/*,
+// internal/frontdesk) is mounted on the same server and carries its own
+// bearer tokens.
 package httpapi
 
 import (
@@ -76,6 +81,10 @@ type Server struct {
 	Now       func() time.Time // defaults to time.Now
 	// Extra registers more routes on the same mux (the Front Desk).
 	Extra func(*http.ServeMux)
+	// ClientDir is the self-host game (index.html and assets) served at
+	// /tavern/. Empty means the route answers 404. Compose mounts the
+	// data-only image's copy at /tavern/client.
+	ClientDir string
 	// Owner reports whether a request carries the owner token (the Front
 	// Desk's IsOwner). It guards GET /api/tasks, /api/tasks/{id},
 	// /api/quest, every /tasks route, PUT /goal and every /actions/* route.
@@ -119,23 +128,25 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.client) // OS5: the owner panel (not the pixel-art tavern)
 	mux.HandleFunc("GET /client.css", s.clientCSS)
 	mux.HandleFunc("GET /client.js", s.clientJS)
+	mux.HandleFunc("GET /tavern", s.tavernSlash)
+	mux.HandleFunc("GET /tavern/", s.serveTavern)
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /agents", s.agents)
 	mux.HandleFunc("GET /agents/{id}/budget", s.budget)
-	mux.HandleFunc("POST /agents/{id}/usage", s.addUsage)
+	mux.HandleFunc("POST /agents/{id}/usage", s.ownerOnly(s.addUsage))
 	mux.HandleFunc("GET /agents/{id}/usage", s.getUsage)
 	mux.HandleFunc("POST /actions/check", s.ownerOnly(s.check))
 	mux.HandleFunc("GET /agents/{id}/blocked", s.blocked)
 	mux.HandleFunc("POST /actions/pending", s.ownerOnly(s.pending))
 	mux.HandleFunc("POST /actions/answer", s.ownerOnly(s.answer))
 	mux.HandleFunc("GET /autonomy", s.autonomyLog)
-	mux.HandleFunc("POST /asks", s.preAsk)
-	mux.HandleFunc("POST /asks/opened", s.askOpened)
+	mux.HandleFunc("POST /asks", s.ownerOnly(s.preAsk))
+	mux.HandleFunc("POST /asks/opened", s.ownerOnly(s.askOpened))
 	mux.HandleFunc("POST /asks/answer", s.ownerOnly(s.askAnswer))
 	mux.HandleFunc("GET /asks", s.listAsks)
 	mux.HandleFunc("GET /goal", s.getGoal)
 	mux.HandleFunc("PUT /goal", s.ownerOnly(s.setGoal))
-	mux.HandleFunc("POST /goal/progress", s.reportGoal)
+	mux.HandleFunc("POST /goal/progress", s.ownerOnly(s.reportGoal))
 	mux.HandleFunc("GET /tasks", s.ownerOnly(s.listTasks))
 	mux.HandleFunc("GET /tasks/{id}", s.ownerOnly(s.getTask))
 	mux.HandleFunc("GET /agents/{id}/queue", s.queue)
@@ -1081,8 +1092,10 @@ func (s *Server) askOpened(w http.ResponseWriter, r *http.Request) {
 
 // askAnswer is POST /asks/answer. ownerOnly runs first: the same owner token
 // check (ownerOnly) as the other owner routes, a constant-time compare of the
-// Authorization bearer. It does not call Approvals.Confirm. A query token is
-// never read. An empty owner token does not match.
+// Authorization bearer. The choice is the JSON body's `choice`; only the
+// owner may send it. It does not call Approvals.Confirm: that interface
+// proves a gate grant, and this card is the owner's answer in the body.
+// A query token is never read. An empty owner token does not match.
 func (s *Server) askAnswer(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Decision string `json:"decision"`

@@ -1,7 +1,8 @@
 // hireling is the process that runs inside every hireling container (A1):
 //
 //	hireling run             poll the front desk queue forever (the container's command)
-//	hireling check           validate the profile, render the Hermes config, ping the front desk
+//	hireling check [--offline]  validate the profile, render the Hermes config, ping the front desk
+//	                         --offline skips the provider key probe
 //	hireling once "<text>"   run one command locally without the queue (smoke test)
 //	hireling usage [1h]      what the turns of the last period cost, from the Hermes store (A2)
 //	hireling send <to> "<text>" [type] [task]   put a message in another hireling's inbox (A5 smoke test)
@@ -20,6 +21,7 @@
 //	FRONTDESK_OWNER_TOKEN    the owner bearer for /tasks, PUT /goal and /actions/* (same value as tavern-core; never logged)
 //	CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET   optional, when the desk sits behind Cloudflare Access
 //	DEEPSEEK_API_KEY          read by Hermes; hireling check classifies it and never logs the value
+//	HIRELING_MODEL_BASE_URL   OpenAI-compatible model base URL (default https://api.deepseek.com/v1)
 //	OPENROUTER_API_KEY        optional; when set, Hermes falls back to the same model on OpenRouter
 //	TAVERN_URL                tavern-core on the Compose network (http://tavern-core:8080); usage per turn goes there
 //	REDIS_URL                 the bar (redis://redis:6379/0); unset = no inbox loop
@@ -89,7 +91,10 @@ func main() {
 		} else {
 			fmt.Println("fallback off (no OPENROUTER_API_KEY or disabled in the profile)")
 		}
-		if line := providerKeyLine(ctx, os.Getenv("DEEPSEEK_API_KEY")); line != "" {
+		// --offline skips the provider probe (no network). The default still probes.
+		if offlineCheck(os.Args[2:]) {
+			fmt.Println("provider probe skipped (--offline)")
+		} else if line := providerKeyLine(ctx, os.Getenv("DEEPSEEK_API_KEY")); line != "" {
 			fmt.Println(line)
 		}
 		if l.Tavern != nil {
@@ -346,6 +351,17 @@ func noteAllowHTTP(logger *log.Logger, v string) bool {
 	return true
 }
 
+// offlineCheck reports whether hireling check was asked to skip the provider
+// key probe. The flag is opt-in: without it the probe still runs.
+func offlineCheck(args []string) bool {
+	for _, a := range args {
+		if a == "--offline" {
+			return true
+		}
+	}
+	return false
+}
+
 // providerClient bounds the one key probe hireling check may make. The key
 // is a header and is never written to a log line.
 var providerClient = &http.Client{Timeout: 3 * time.Second}
@@ -355,7 +371,7 @@ var providerClient = &http.Client{Timeout: 3 * time.Second}
 // looks real is asked of the provider once; only 401 and 403 are invalid.
 // A network error prints nothing. The returned text never contains the key.
 func providerKeyLine(ctx context.Context, key string) string {
-	return providerKeyLineAt(ctx, hermes.DeepSeekBaseURL+"/models", key, providerClient)
+	return providerKeyLineAt(ctx, hermes.BaseURL(os.Getenv("HIRELING_MODEL_BASE_URL"))+"/models", key, providerClient)
 }
 
 func providerKeyLineAt(ctx context.Context, url, key string, client *http.Client) string {
@@ -406,7 +422,7 @@ func build(logger *log.Logger) (*loop.Loop, error) {
 		return nil, fmt.Errorf("HIRELING_AGENT=%s but %s says id %s", id, dir, p.ID)
 	}
 	home := env("HERMES_HOME", "/opt/data")
-	opts := hermes.Options{OpenRouter: os.Getenv("OPENROUTER_API_KEY") != "", Gate: gateCommand(p.ID, home)}
+	opts := hermes.Options{OpenRouter: os.Getenv("OPENROUTER_API_KEY") != "", Gate: gateCommand(p.ID, home), BaseURL: os.Getenv("HIRELING_MODEL_BASE_URL")}
 	handsPrompt := hands(logger, p, home, &opts)
 	ledgerPrompt, ledgerToken := ledger(logger, p, &opts)
 	if err := hermes.WriteConfig(home, p, opts); err != nil {

@@ -11,6 +11,15 @@ import (
 	"testing"
 )
 
+func TestOfflineCheck(t *testing.T) {
+	if offlineCheck(nil) || offlineCheck([]string{"--online"}) {
+		t.Fatal("probe must stay on unless --offline is set")
+	}
+	if !offlineCheck([]string{"--offline"}) || !offlineCheck([]string{"--verbose", "--offline"}) {
+		t.Fatal("--offline did not skip the provider probe")
+	}
+}
+
 func TestNoteAllowHTTP(t *testing.T) {
 	var buf bytes.Buffer
 	logger := log.New(&buf, "", 0)

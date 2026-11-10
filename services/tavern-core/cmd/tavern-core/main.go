@@ -10,6 +10,7 @@
 //	FRONTDESK_OWNER_TOKEN  bearer token of the owner (orders, decisions, status); unset = owner endpoints closed
 //	FRONTDESK_AGENT_TOKEN  bearer token any hireling of this tavern may use
 //	FRONTDESK_TOKEN_<ID>   a hireling's own token (overrides the shared one for that hireling)
+//	TAVERN_CLIENT_DIR      self-host game files served at /tavern/ (default /tavern/client)
 package main
 
 import (
@@ -19,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -130,7 +132,11 @@ func main() {
 	if err := desk.Check(); err != nil {
 		logger.Fatalf("front desk: %v", err) // never prints a token
 	}
-	srv := &httpapi.Server{Gate: gate, Tasks: queue, Usage: spent, Goal: quests, Grants: grants, Log: autoLog, Asks: askBook, Approvals: desk, Ready: ready, Extra: desk.Register, Owner: desk.IsOwner}
+	clientDir := env("TAVERN_CLIENT_DIR", "/tavern/client")
+	srv := &httpapi.Server{Gate: gate, Tasks: queue, Usage: spent, Goal: quests, Grants: grants, Log: autoLog, Asks: askBook, Approvals: desk, Ready: ready, Extra: desk.Register, Owner: desk.IsOwner, ClientDir: clientDir}
+	if st, err := os.Stat(filepath.Join(clientDir, "index.html")); err == nil && !st.IsDir() {
+		logger.Printf("self-host client at /tavern/ from %s; license at /tavern/licenses/LICENSE-CLIENT.md", clientDir)
+	}
 	// The panel reads the quest from GET /api/status so an unset quest is an
 	// empty state on a 200. GET /api/quest stays 404 for API clients.
 	desk.Quest = srv.QuestSnapshot

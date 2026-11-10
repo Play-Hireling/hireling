@@ -45,7 +45,7 @@ Run as the `hermes` user: `docker compose exec -u hermes agent-<id> hireling <co
 | Command | Does |
 | --- | --- |
 | `hireling run` | The container's command: Front Desk queue + bar loop, forever |
-| `hireling check` | Validate the profile, write Hermes' config, and print one line per subsystem (profile, fallback, usage, planner/party, escalation, shared, quest, bar, hands, ledger, turns, latency, frontdesk). Exits 2 when the Front Desk is unreachable |
+| `hireling check` | Validate the profile, write Hermes' config, and print one line per subsystem (profile, fallback, usage, planner/party, escalation, shared, quest, bar, hands, ledger, turns, latency, frontdesk). The provider key probe runs unless you pass `--offline`, which skips it. Exits 2 when the Front Desk is unreachable |
 | `hireling once "<text>"` | Run one command locally without the queue (smoke test) |
 | `hireling usage [1h]` | What the turns of the last period cost, from Hermes' store |
 | `hireling send <to> "<text>" [type] [task]` | Put a message in another hireling's inbox (`type` = request, reply, handoff, note, alert) |

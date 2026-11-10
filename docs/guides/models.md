@@ -7,7 +7,7 @@
 | `deepseek-v4-flash` | `https://api.deepseek.com/v1`, model `deepseek-v4-flash` | Every worker hireling |
 | `deepseek-v4-pro` | same, `deepseek-v4-pro` | The planner (Innkeeper) |
 
-The runtime writes Hermes' `config.yaml` with provider `custom`, the DeepSeek base URL and `key_env: DEEPSEEK_API_KEY`. The key is read by Hermes from the environment and never written to disk.
+The runtime writes Hermes' `config.yaml` with provider `custom`, the model base URL and `key_env: DEEPSEEK_API_KEY`. The base URL defaults to `https://api.deepseek.com/v1`. Set `HIRELING_MODEL_BASE_URL` to another OpenAI-compatible endpoint (a stub in a test, for example). The key is read by Hermes from the environment and never written to disk.
 
 ### Fallback to OpenRouter
 

@@ -1,6 +1,6 @@
 # Quickstart
 
-Self-host the engine and the panel. In about ten minutes you get tavern-core, three hirelings (**Innkeeper**, **Scriptwriter** and **Dev**), the owner panel, and the orders API (`./bin/tavern` and `http://127.0.0.1:8080/api/`). This does not include the pixel-art tavern. That game is not in this repository and this quickstart does not serve it. Play it at [playhireling.com/play](https://playhireling.com/play/).
+Self-host the engine and the panel. In about ten minutes you get tavern-core, three hirelings (**Innkeeper**, **Scriptwriter** and **Dev**), the owner panel, and the orders API (`./bin/tavern` and `http://127.0.0.1:8080/api/`). The default commands below do not start the pixel-art tavern. That game is not in this repository. A clean run of those commands, from zero images, is recorded at 95s in [the evidence log](../evidence/quickstart-run.md). The public demo is at [playhireling.com/play](https://playhireling.com/play/). The optional [`game` profile](#optional-pixel-art-client) serves a client you build yourself at `/tavern/`.
 
 ## What you need
 
@@ -33,7 +33,7 @@ DEEPSEEK_API_KEY=sk-paste-your-key-here
 
 That value is a placeholder. Replace it with your own key. An empty value makes Compose refuse to start.
 
-> **A real provider key is required for an order to leave `start`.** `sk-paste-your-key-here`, `sk-placeholder-…`, or any other placeholder lets the box boot and the checks below pass, but `./bin/tavern status` stays in phase `start`: the hireling retries the provider and does not plan. `hireling check` prints `provider key missing/invalid` when the key is empty, a placeholder, or the provider answers 401 or 403. That line does not include the key.
+> **A real provider key is required for an order to leave `start`.** `sk-paste-your-key-here`, `sk-placeholder-…`, or any other placeholder lets the box boot and the checks below pass, but `./bin/tavern status` stays in phase `start`: the hireling retries the provider and does not plan. `hireling check` prints `provider key missing/invalid` when the key is empty, a placeholder, or the provider answers 401 or 403. That line does not include the key. `hireling check --offline` skips the probe.
 
 ## 2. Check the host firewall, then start the engine
 
@@ -152,9 +152,38 @@ curl -sS -X PUT \
 ./bin/tavern quest
 ```
 
-The bearer is required: without it this call is 401. `X-Hireling: owner` still names who is defining the quest (the owner, or a planner's id); it does not replace the bearer. Do not put the token in the query string.
+The bearer is required: without it this call is 401. `X-Hireling: owner` still names who is defining the quest (the owner, or a planner's id); it does not replace the bearer. The comparison is exact: `Owner` and `OWNER` are 403. A bearer with no `X-Hireling: owner` header is also 403. Do not put the token in the query string.
 
 See [Quest and tasks](../concepts/quest-and-tasks.md).
+
+## Optional: pixel-art client
+
+The default `docker compose up` does not pull a client image. Profile `game` serves a data-only image at `http://127.0.0.1:8080/tavern/` on the same origin as the API. The digest in `compose.yaml` is a placeholder (`sha256` of zeros) until that image is published. It is not a real image. Do not push one from this checkout.
+
+Build the client from the `main` branch of `Play-Hireling/playhireling` (`npm run build:selfhost`), then pack it locally. Nothing is published:
+
+```bash
+scripts/pack-client.sh /path/to/playhireling/dist-selfhost
+# writes hireling/client:local and does not push
+```
+
+```bash
+HIRELING_CLIENT_IMAGE=hireling/client:local docker compose --profile game up -d --build
+```
+
+`docker buildx` is the recommended builder for `hireling/runtime:local`. Only `agent-innkeeper` builds that image. Open `http://127.0.0.1:8080/tavern/`, paste `FRONTDESK_OWNER_TOKEN` (it stays in `sessionStorage`; there is no remember option) and enter the tavern.
+
+Give the order in the game at `/tavern/` when that screen accepts one. If it does not, use the CLI, which is the same order:
+
+```bash
+./bin/tavern order innkeeper "Plan a launch post for our new feature, due Friday"
+```
+
+The owner panel at `/` does not grow an order button for this. Answer a decision in the game, or with `./bin/tavern choose`.
+
+If you already had a stack from before the bridge was named `br-hireling`, recreate the tavern network (`docker compose down`, and `docker network rm hireling_tavern` if it remains) so the name applies, then `docker compose up -d`.
+
+The client image's license is [LICENSE-CLIENT.md](../../LICENSE-CLIENT.md). The public notice is [NOTICE](../../NOTICE) and [THIRD-PARTY.md](../../THIRD-PARTY.md). `docs/provenance` is not in the image and not in this repository.
 
 ## Troubleshooting
 
@@ -171,5 +200,7 @@ See [Quest and tasks](../concepts/quest-and-tasks.md).
 | Turns take ~20 s instead of ~3 s | The Hermes gateway did not start on a fresh volume; `HERMES_GATEWAY_BOOTSTRAP_STATE=running` must be in the hireling's environment. |
 | `egress deny <agent> <host>` in `docker compose logs egress` | Working as designed: add the host to the hireling's `network.allow` ([profile reference](../reference/profile.md#network)). |
 | Ran `hireling once` and usage stopped saving | Use `docker compose exec -u hermes …`; running as root leaves root-owned files on the volume. |
+| Containers cannot reach each other after an older checkout | Recreate the tavern network so the bridge name `br-hireling` applies: `docker compose down`, then `docker compose up -d`. If the old network is still there, `docker network rm hireling_tavern` before the next `up`. |
+| `hireling check` should not call the provider | `docker compose exec -u hermes agent-innkeeper hireling check --offline` skips the key probe. |
 
 Stop everything with `docker compose down` (volumes and memory survive). `docker compose down -v` deletes them.

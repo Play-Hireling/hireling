@@ -23,6 +23,13 @@ git clone https://github.com/Play-Hireling/hireling.git /opt/hireling && cd /opt
 docker compose up -d --build
 ```
 
+`docker buildx` is the recommended builder for the one runtime image. Only `agent-innkeeper` builds `hireling/runtime:local`; the other hirelings use that image.
+
+```bash
+docker buildx build -f runtime/Dockerfile -t hireling/runtime:local --load .
+```
+
+
 `preflight.sh` does not run `sudo`. Exit 0 continues. Exit 2 means it could not read `iptables-legacy`; run `sudo ./scripts/preflight.sh`. Exit 1 means the legacy `FORWARD` policy is `DROP` beside Docker's nft backend. The tavern bridge is `br-hireling` (`compose.yaml`). The fix, which the script only prints, checks before inserting and does not flush or change the policy. It does not match `br0`, `br-lan`, or `br-wan`:
 
 ```bash

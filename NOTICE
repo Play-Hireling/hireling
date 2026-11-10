@@ -6,3 +6,12 @@ This product includes software developed by the Hireling contributors
 
 The hireling container image is built on Hermes Agent by Nous Research
 (nousresearch/hermes-agent), which is distributed under its own license.
+
+The self-host client image (hireling-client) is under LICENSE-CLIENT.md.
+Its third-party notices, including the eight sound files, are in
+THIRD-PARTY.md. Those mp3 files are ElevenLabs Sound Effects. The six
+effects are plano Creator, 19/10–19/11/2026, with C2PA dated 04/11/2026.
+door_open.mp3 and door_close.mp3 are ElevenLabs Sound Effects, plano
+Creator, 10/11/2026. Credit: elevenlabs.io. They travel only inside the
+game. No music and no cursed_* track is in that image. docs/provenance
+is not in this repository and not in the image.
