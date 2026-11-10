@@ -19,7 +19,7 @@
 //	FRONTDESK_TOKEN_<ID>     this hireling's front desk token (falls back to FRONTDESK_AGENT_TOKEN)
 //	FRONTDESK_OWNER_TOKEN    the owner bearer for /tasks, PUT /goal and /actions/* (same value as tavern-core; never logged)
 //	CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET   optional, when the desk sits behind Cloudflare Access
-//	DEEPSEEK_API_KEY          read by Hermes, never by this program
+//	DEEPSEEK_API_KEY          read by Hermes; hireling check classifies it and never logs the value
 //	OPENROUTER_API_KEY        optional; when set, Hermes falls back to the same model on OpenRouter
 //	TAVERN_URL                tavern-core on the Compose network (http://tavern-core:8080); usage per turn goes there
 //	REDIS_URL                 the bar (redis://redis:6379/0); unset = no inbox loop
@@ -29,7 +29,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -86,6 +88,9 @@ func main() {
 			fmt.Printf("fallback openrouter %s\n", m)
 		} else {
 			fmt.Println("fallback off (no OPENROUTER_API_KEY or disabled in the profile)")
+		}
+		if line := providerKeyLine(ctx, os.Getenv("DEEPSEEK_API_KEY")); line != "" {
+			fmt.Println(line)
 		}
 		if l.Tavern != nil {
 			fmt.Printf("usage    %s → tavern-core %s\n", l.UsageDir, os.Getenv("TAVERN_URL"))
@@ -339,6 +344,55 @@ func noteAllowHTTP(logger *log.Logger, v string) bool {
 	}
 	logger.Printf("frontdesk: FRONTDESK_ALLOW_HTTP=1; plain http to a non-loopback host is allowed")
 	return true
+}
+
+// providerClient bounds the one key probe hireling check may make. The key
+// is a header and is never written to a log line.
+var providerClient = &http.Client{Timeout: 3 * time.Second}
+
+// providerKeyLine is the hireling check line for a DeepSeek key that cannot
+// start a turn. Empty and placeholder values are decided locally. A key that
+// looks real is asked of the provider once; only 401 and 403 are invalid.
+// A network error prints nothing. The returned text never contains the key.
+func providerKeyLine(ctx context.Context, key string) string {
+	return providerKeyLineAt(ctx, hermes.DeepSeekBaseURL+"/models", key, providerClient)
+}
+
+func providerKeyLineAt(ctx context.Context, url, key string, client *http.Client) string {
+	if providerPlaceholder(key) {
+		return "provider key missing/invalid"
+	}
+	if client == nil {
+		return ""
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(key))
+	res, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer res.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 512))
+	if res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden {
+		return "provider key missing/invalid"
+	}
+	return ""
+}
+
+func providerPlaceholder(key string) bool {
+	k := strings.TrimSpace(strings.ToLower(key))
+	if k == "" {
+		return true
+	}
+	for _, s := range []string{"placeholder", "paste-your-key", "paste_your_key", "your-key-here", "changeme"} {
+		if strings.Contains(k, s) {
+			return true
+		}
+	}
+	return false
 }
 
 func build(logger *log.Logger) (*loop.Loop, error) {

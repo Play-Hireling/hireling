@@ -31,7 +31,9 @@ If `nano` is not installed, run `vi .env` instead. The line you want is:
 DEEPSEEK_API_KEY=sk-paste-your-key-here
 ```
 
-That value is a placeholder. Replace it with your own key. An empty value makes Compose refuse to start. Any non-empty value is enough for the box to boot and for the checks below; a turn that calls the model needs a real key.
+That value is a placeholder. Replace it with your own key. An empty value makes Compose refuse to start.
+
+> **A real provider key is required for an order to leave `start`.** `sk-paste-your-key-here`, `sk-placeholder-…`, or any other placeholder lets the box boot and the checks below pass, but `./bin/tavern status` stays in phase `start`: the hireling retries the provider and does not plan. `hireling check` prints `provider key missing/invalid` when the key is empty, a placeholder, or the provider answers 401 or 403. That line does not include the key.
 
 ## 2. Check the host firewall, then start the engine
 
@@ -94,7 +96,7 @@ frontdesk  ok (queue readable)
 ./bin/tavern order innkeeper "Plan a launch post and a 60-second video script for our new feature, due Friday"
 ```
 
-The desk accepts the order at once (`{"command":{…}}`) and `./bin/tavern status` shows the Innkeeper's turn in phase `start`. The plan itself needs a real `DEEPSEEK_API_KEY`; with any other value the turn fails at the model and the tavern stays up. With a real key the Innkeeper plans (usually under 30 seconds), creates one task per hireling, files a brief for each on the common table and messages the owners on the bar. Watch it:
+The desk accepts the order at once (`{"command":{…}}`). With a real `DEEPSEEK_API_KEY`, `./bin/tavern status` moves on from phase `start` and the Innkeeper plans (usually under 30 seconds), creates one task per hireling, files a brief for each on the common table and messages the owners on the bar. **Without a real key the status stays in phase `start`** while the provider retries; the tavern stays up, and the plan does not run. Watch it:
 
 ```bash
 ./bin/tavern status        # each hireling's current turn and last answer
@@ -141,10 +143,16 @@ GOAL_KINDS=revenue,leads,posts,videos,support
 …or set it any time (only the owner or the planner may define it; the currency is a three-letter code):
 
 ```bash
-curl -X PUT -H 'X-Hireling: owner' -H 'Content-Type: application/json' \
-  -d '{"title":"Monthly revenue","target":5000,"currency":"USD"}' http://127.0.0.1:8080/goal
+curl -sS -X PUT \
+  -H "Authorization: Bearer $FRONTDESK_OWNER_TOKEN" \
+  -H 'X-Hireling: owner' \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Monthly revenue","target":5000,"currency":"USD"}' \
+  http://127.0.0.1:8080/goal
 ./bin/tavern quest
 ```
+
+The bearer is required: without it this call is 401. `X-Hireling: owner` still names who is defining the quest (the owner, or a planner's id); it does not replace the bearer. Do not put the token in the query string.
 
 See [Quest and tasks](../concepts/quest-and-tasks.md).
 
@@ -153,7 +161,7 @@ See [Quest and tasks](../concepts/quest-and-tasks.md).
 | Symptom | Fix |
 | --- | --- |
 | `.env: command not found` right after `init-env.sh` | `$EDITOR` is unset, so the shell tried to run `.env`. Use `${EDITOR:-nano} .env` or `vi .env`. |
-| `required variable DEEPSEEK_API_KEY is missing` | Set `DEEPSEEK_API_KEY` in `.env` to a non-empty value. A real key is only required for a model turn. |
+| `required variable DEEPSEEK_API_KEY is missing` | Set `DEEPSEEK_API_KEY` in `.env`. A placeholder boots the box; a real key is required for the turn to leave phase `start`. |
 | `run ./scripts/init-env.sh` | The Front Desk tokens are empty. |
 | `./scripts/preflight.sh` exits 2 | It could not read `iptables-legacy` and did not run `sudo`. Run `sudo ./scripts/preflight.sh`. Exit 2 is not a pass. |
 | `./scripts/preflight.sh` exits 1, or `tavern-core` stays **unhealthy** and its logs say `dial tcp …:6379: i/o timeout`, while `docker compose exec redis redis-cli ping` prints `PONG` | `iptables-legacy` has `FORWARD` policy `DROP` while Docker programs nftables. Run the `sudo iptables-legacy -C FORWARD -i br-hireling -o br-hireling` command in the step above (the same one `preflight.sh` prints), then `sudo ./scripts/preflight.sh` again (it must exit 0) and `docker compose up -d`. That one rule does not flush the table, does not change the policy, and does not turn the firewall off. |

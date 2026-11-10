@@ -28,7 +28,7 @@ tavern-core is the tavern's state: tasks with leases, priorities, the quest, usa
 | `GET /autonomy?day=&agent=&limit=` | — | `{"day","done","blocked","entries":[…]}` — the Autonomy Log (D4) |
 | `POST /asks` | `{"agent","task","turn","action","question","blocked"}` | `{"verdict":"yours|joined|ask","level","reason","decision","follow_ups"}` — D11, before a card opens |
 | `POST /asks/opened` | `{"agent","decision","task","action","question","recommended"}` | The recorded card (one per task) |
-| `POST /asks/answer` | `{"decision","choice"}` | `{"found","card":{…,"follow_ups","choice","picked_recommended"}}` — owner bearer, same check as `/actions/answer` |
+| `POST /asks/answer` | `{"decision","choice"}` | `{"found","card":{…,"follow_ups","choice","picked_recommended"}}` — owner bearer, same owner token check (ownerOnly). It does not call Approvals.Confirm |
 | `GET /asks?agent=` | — | `{"open":[…],"stats":[{"agent","opened","joined","bounced","answered","picked_recommended","tasks","asks_per_task","could_have_decided_alone"}]}` |
 
 With `"use": true` the check counts a capped use in its UTC day or ISO week window (D2), consumes a one-time grant from your approval, and remembers a block for the next card. A cap of `0` means none without you; a `*_usd` cap cannot be counted per call, so every spend is yours. An action that cannot be written to the Autonomy Log is blocked.

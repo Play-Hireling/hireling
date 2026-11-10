@@ -14,7 +14,7 @@
 //	GET  /autonomy?day=&agent=&limit= the Autonomy Log (D4): who, what, why, outcome, turn cost
 //	POST /asks                        D11: before a card opens — yours (send it back) | joined (open card on the task) | ask
 //	POST /asks/opened                 the card the runtime opened (one per task)
-//	POST /asks/answer                 the owner's choice → the card's follow-ups and whether they picked the recommendation (owner bearer, same check as /actions/answer)
+//	POST /asks/answer                 the owner's choice → the card's follow-ups and whether they picked the recommendation (owner bearer, same owner token check (ownerOnly); not Approvals.Confirm)
 //	GET  /asks?agent=                 open cards and per-hireling counters ("could have decided alone")
 //	GET  /tasks · POST /tasks
 //	POST /tasks/{id}/lease · /renew · /handoff · /finish
@@ -28,11 +28,13 @@
 //	GET/POST /tasks and /tasks/{id}/* the task board the hirelings use
 //	PUT  /goal                        define the quest
 //	POST /actions/check|pending|answer
+//	POST /asks/answer                 close a D11 card (ownerOnly only; not Approvals.Confirm)
 //
 // The hirelings send that same bearer from FRONTDESK_OWNER_TOKEN. They still
 // identify themselves with X-Hireling. The other routes (health, agents,
-// usage, asks, autonomy, GET /goal, POST /goal/progress) stay on the Compose
-// network with X-Hireling. The Front Desk (/api/*, internal/frontdesk) is
+// usage, POST /asks, POST /asks/opened, GET /asks, autonomy, GET /goal,
+// POST /goal/progress) stay on the Compose network with X-Hireling.
+// POST /asks/answer does not. The Front Desk (/api/*, internal/frontdesk) is
 // mounted on the same server and carries its own bearer tokens.
 package httpapi
 
@@ -1077,10 +1079,10 @@ func (s *Server) askOpened(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, o)
 }
 
-// askAnswer is POST /asks/answer. ownerOnly (the same helper as
-// /actions/answer) runs first: the Front Desk's IsOwner, a constant-time
-// compare of the Authorization bearer. A query token is never read. An empty
-// owner token does not match.
+// askAnswer is POST /asks/answer. ownerOnly runs first: the same owner token
+// check (ownerOnly) as the other owner routes, a constant-time compare of the
+// Authorization bearer. It does not call Approvals.Confirm. A query token is
+// never read. An empty owner token does not match.
 func (s *Server) askAnswer(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Decision string `json:"decision"`
