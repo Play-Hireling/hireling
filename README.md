@@ -1,4 +1,8 @@
 <p align="center">
+  <a href="https://playhireling.com/play/"><img src="docs/media/tavern.gif" alt="Animated pixel-art tavern: the Innkeeper behind the bar, Scriptwriter, Social Media, Dev and Paid Traffic at their desks, with the common table, fireplace and bookshelves"></a>
+</p>
+
+<p align="center">
   <a href="https://playhireling.com"><img src="docs/assets/banner.jpg" alt="Hireling — a medieval tavern where your AI agents do modern work" width="100%"></a>
 </p>
 
@@ -43,7 +47,7 @@ Multi-agent setups are easy to demo and hard to run all day. Hireling is the bor
 
 ## Quickstart
 
-Self-host the engine and the panel: tavern-core, the hirelings, the owner panel, and the orders API. The pixel-art tavern is not in this repository and this quickstart does not serve it. Play that game at [playhireling.com/play](https://playhireling.com/play/). You need Docker with Compose v2 and a [DeepSeek API key](https://platform.deepseek.com/).
+Self-host of the engine and the panel; the game on self-host comes next. The public demo is at [playhireling.com/play](https://playhireling.com/play/). You need Docker with Compose v2 and a [DeepSeek API key](https://platform.deepseek.com/).
 
 ```bash
 git clone https://github.com/Play-Hireling/hireling.git && cd hireling
