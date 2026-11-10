@@ -36,5 +36,5 @@ chmod 600 .env 2>/dev/null || true
 
 if ! grep -q '^DEEPSEEK_API_KEY=..*' .env; then
   echo
-  echo "Next: paste your DeepSeek key into .env (DEEPSEEK_API_KEY=…), then: docker compose up -d --build"
+  echo "Next: paste your DeepSeek key (${EDITOR:-nano} .env, DEEPSEEK_API_KEY=…), then: ./scripts/preflight.sh && docker compose up -d --build"
 fi

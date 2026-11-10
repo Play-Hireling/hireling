@@ -1,6 +1,6 @@
 # Quickstart
 
-A tavern with three hirelings — **Innkeeper**, **Scriptwriter** and **Dev** — on your machine, in about ten minutes.
+Self-host the engine and the panel. In about ten minutes you get tavern-core, three hirelings (**Innkeeper**, **Scriptwriter** and **Dev**), the owner panel, and the orders API (`./bin/tavern` and `http://127.0.0.1:8080/api/`). This does not include the pixel-art tavern. That game is not in this repository and this quickstart does not serve it. Play it at [playhireling.com/play](https://playhireling.com/play/).
 
 ## What you need
 
@@ -33,23 +33,35 @@ DEEPSEEK_API_KEY=sk-paste-your-key-here
 
 That value is a placeholder. Replace it with your own key. An empty value makes Compose refuse to start. Any non-empty value is enough for the box to boot and for the checks below; a turn that calls the model needs a real key.
 
-## 2. Start the tavern
+## 2. Check the host firewall, then start the engine
 
 ```bash
+./scripts/preflight.sh
 docker compose up -d --build
 docker compose ps -a
 ```
 
+`preflight.sh` does not change the firewall and does not download anything. It exits 0 on a host that is not affected. On Ubuntu with Docker Engine from Docker's apt repository it can find `iptables-legacy` with `FORWARD` policy `DROP` beside the nft backend Docker programs. Compose bridges are named `br-*`, not `docker0`, so that policy drops traffic between containers: tavern-core logs `dial tcp …:6379: i/o timeout` and the first `up` exits 1.
+
+If the script exits 1, it prints the current legacy chain and this command. Run it, then run `./scripts/preflight.sh` again. Do not start Compose until the script exits 0.
+
+```bash
+sudo iptables-legacy -C FORWARD -i br+ -o br+ -j ACCEPT 2>/dev/null || sudo iptables-legacy -I FORWARD 1 -i br+ -o br+ -j ACCEPT
+```
+
+That does not turn the firewall off. Docker's nftables rules stay in place and still filter forwarded traffic. The command adds one `ACCEPT` on the unused legacy table, only for interfaces named `br-*`, and only if that rule is missing. It does not flush rules, does not change the `FORWARD` policy, does not touch `INPUT` or `OUTPUT`, does not touch `iptables-nft`, and does not stop ufw or firewalld.
+
 The first build pulls the Hermes Agent image and compiles three Go binaries (a few minutes). You should see `redis`, `tavern-core` and `egress` **healthy**, `tavern-init` **exited (0)** and three `agent-*` containers **running**.
 
-The tavern is up when both of these succeed. They do not call DeepSeek.
+The engine is up when both of these succeed. They do not call DeepSeek.
 
 ```bash
 curl -fsS http://127.0.0.1:8080/healthz
 # {"agents":["dev","innkeeper","paid-traffic","scriptwriter","social-media","test"],"status":"ok"}
 
 curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
-# 200 — the plain-art tavern. Open http://127.0.0.1:8080/ in a browser on this machine.
+# 200 — the owner panel. Open http://127.0.0.1:8080/ in a browser on this machine.
+# Party, decisions and the quest bar. Not the pixel-art tavern.
 ```
 
 `./bin/tavern health` prints the same JSON. The port is bound to `127.0.0.1` only.
@@ -141,7 +153,7 @@ See [Quest and tasks](../concepts/quest-and-tasks.md).
 | `.env: command not found` right after `init-env.sh` | `$EDITOR` is unset, so the shell tried to run `.env`. Use `${EDITOR:-nano} .env` or `vi .env`. |
 | `required variable DEEPSEEK_API_KEY is missing` | Set `DEEPSEEK_API_KEY` in `.env` to a non-empty value. A real key is only required for a model turn. |
 | `run ./scripts/init-env.sh` | The Front Desk tokens are empty. |
-| `tavern-core` stays **unhealthy** and its logs say `dial tcp …:6379: i/o timeout`, while `docker compose exec redis redis-cli ping` prints `PONG` | The host firewall is dropping traffic between containers. `docker info` should show one firewall backend. If `iptables-legacy` has `FORWARD` policy `DROP` and only accepts `docker0`, while Docker itself programs `iptables-nft`, Compose networks never pass packets. Use one backend (Docker Engine from the Docker docs, not two iptables stacks). |
+| `./scripts/preflight.sh` exits 1, or `tavern-core` stays **unhealthy** and its logs say `dial tcp …:6379: i/o timeout`, while `docker compose exec redis redis-cli ping` prints `PONG` | `iptables-legacy` has `FORWARD` policy `DROP` while Docker programs nftables. Run the `sudo iptables-legacy -C FORWARD -i br+` command in the step above (the same one `preflight.sh` prints), then `./scripts/preflight.sh` again (it must exit 0) and `docker compose up -d`. That one rule does not flush the table, does not change the policy, and does not turn the firewall off. |
 | `frontdesk: FRONTDESK_URL must be https://` in `docker compose logs agent-innkeeper` | The runtime refuses plain `http://` except to `127.0.0.1` or `::1`. Compose sets `FRONTDESK_ALLOW_HTTP=1` for `http://tavern-core:8080`. Keep that line; do not point a hireling at a public desk over `http://`. |
 | A hireling restarts in a loop with `s6-applyuidgid` | Your Docker drops capabilities differently; keep the `cap_add` list from `compose.yaml`. |
 | `frontdesk HTTP 401` in `hireling check` | The hireling's token doesn't match tavern-core's: restart both after editing `.env` (`docker compose up -d`). |

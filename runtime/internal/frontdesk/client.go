@@ -10,8 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
@@ -58,9 +58,10 @@ type Client struct {
 	Token          string
 	CFAccessID     string
 	CFAccessSecret string
-	// AllowHTTP permits http:// to a host that is not a loopback IP.
+	// AllowHTTP permits http:// to a host that is not exactly 127.0.0.1 or ::1.
 	// Compose sets FRONTDESK_ALLOW_HTTP=1: the desk is http://tavern-core:8080
 	// on the internal network. Leave it unset for a desk on the public internet.
+	// Only AllowHTTPEnv reports that the environment asked for this.
 	AllowHTTP bool
 	HTTP      *http.Client
 }
@@ -80,18 +81,38 @@ func (c *Client) ready() error {
 	if u.User != nil {
 		return fmt.Errorf("frontdesk: FRONTDESK_URL must not carry credentials")
 	}
-	// A name such as localhost is whatever the hosts file says, so only
-	// loopback IP literals are trusted without https. The Compose network
-	// opts in with AllowHTTP (FRONTDESK_ALLOW_HTTP=1).
+	// A name such as localhost is whatever the hosts file says, so only the
+	// exact addresses 127.0.0.1 and ::1 are trusted without https. The rest of
+	// 127.0.0.0/8, IPv4-mapped IPv6, and a userinfo trick such as
+	// 127.0.0.1@evil are not loopback. The Compose network opts in with
+	// AllowHTTP (FRONTDESK_ALLOW_HTTP exactly "1").
 	if u.Scheme == "http" && !loopbackHost(u.Hostname()) && !c.AllowHTTP {
 		return fmt.Errorf("frontdesk: FRONTDESK_URL must be https:// (plain http is only allowed to 127.0.0.1 or ::1; set FRONTDESK_ALLOW_HTTP=1 on the internal tavern network)")
 	}
 	return nil
 }
 
+// AllowHTTPEnv reports whether FRONTDESK_ALLOW_HTTP permits plain http to a
+// host other than 127.0.0.1 or ::1. Only the exact string "1" does. "true",
+// "yes", "0", and "1 " do not.
+func AllowHTTPEnv(v string) bool { return v == "1" }
+
+// loopbackHost reports whether host is exactly 127.0.0.1 or ::1.
+// It rejects the rest of 127.0.0.0/8, shorthands such as 127.1, IPv4-mapped
+// IPv6 (::ffff:127.0.0.1), a zone, and anything that is not a bare IP
+// (127.0.0.1@evil, localhost, 127.0.0.1.example).
 func loopbackHost(host string) bool {
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	if host == "" || strings.ContainsAny(host, "@/%") {
+		return false
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil || addr.Zone() != "" || addr.Is4In6() {
+		return false
+	}
+	if addr.Is4() {
+		return addr == netip.AddrFrom4([4]byte{127, 0, 0, 1})
+	}
+	return addr == netip.IPv6Loopback()
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body any, out any) error {

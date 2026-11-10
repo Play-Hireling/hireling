@@ -84,6 +84,22 @@ func TestOrderAckAndStatus(t *testing.T) {
 	}
 }
 
+func TestStatusQuestField(t *testing.T) {
+	d, srv := newDesk(t, nil)
+	var st struct {
+		Quest json.RawMessage `json:"quest"`
+	}
+	if code := call(t, srv, "GET", "/api/status", "owner-tok", "", &st); code != 200 || string(st.Quest) != "null" {
+		t.Fatalf("unset quest: %d %s", code, st.Quest)
+	}
+	d.Quest = func(context.Context) any {
+		return map[string]any{"title": "Monthly revenue", "percent": 0}
+	}
+	if code := call(t, srv, "GET", "/api/status", "owner-tok", "", &st); code != 200 || !strings.Contains(string(st.Quest), `"title":"Monthly revenue"`) {
+		t.Fatalf("set quest: %d %s", code, st.Quest)
+	}
+}
+
 func TestLongPollWakesOnOrder(t *testing.T) {
 	_, srv := newDesk(t, nil)
 	done := make(chan []Command, 1)

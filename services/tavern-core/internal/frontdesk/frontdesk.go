@@ -13,7 +13,7 @@
 //
 // The owner (with the owner token):
 //
-//	GET  /api/status                      every hireling's last turn, open decisions, conversations
+//	GET  /api/status                      every hireling's last turn, open decisions, conversations, and the quest (null when unset)
 //	POST /api/command                     {agent, text} — an order for a hireling
 //	GET  /api/decisions                   open decisions
 //	GET  /api/decisions/{id}              one decision, open or answered (chosen set)
@@ -126,6 +126,11 @@ type Desk struct {
 	OwnerToken string
 	Persist    Persister
 	Now        func() time.Time
+	// Quest, when set, is included in GET /api/status under "quest".
+	// Return nil when no quest is set. The owner panel reads this field
+	// (HTTP 200) so a missing quest is an empty state. GET /api/quest stays
+	// 404 until a quest exists, for API clients.
+	Quest func(context.Context) any
 
 	mu      sync.Mutex
 	st      State
@@ -694,6 +699,11 @@ func (d *Desk) status(w http.ResponseWriter, r *http.Request) {
 		errJSON(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	// Outside the lock: the callback reads the quest store, not the desk.
+	var quest any
+	if d.Quest != nil {
+		quest = d.Quest(r.Context())
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	rows := make([]AgentStatus, 0, len(d.Agents))
@@ -717,6 +727,7 @@ func (d *Desk) status(w http.ResponseWriter, r *http.Request) {
 		"agents":       rows,
 		"decisions":    d.openDecisions(),
 		"interactions": append([]Interaction{}, d.st.Interactions...),
+		"quest":        quest,
 		"at":           d.stamp(),
 	})
 }

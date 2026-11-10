@@ -109,7 +109,7 @@ func (s *Server) now() time.Time {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", s.client) // OS5: the plain-art owner client
+	mux.HandleFunc("GET /{$}", s.client) // OS5: the owner panel (not the pixel-art tavern)
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /agents", s.agents)
 	mux.HandleFunc("GET /agents/{id}/budget", s.budget)
@@ -721,6 +721,23 @@ type questView struct {
 	// C3: declared contributions by kind — open tasks and done tasks.
 	ExpectedOpen map[string]int `json:"expected_open"`
 	ExpectedDone map[string]int `json:"expected_done"`
+}
+
+// QuestSnapshot is the object GET /api/status puts in "quest", or nil when
+// none is set. The owner panel reads it from that 200 response. GET /api/quest
+// stays 404 until a quest exists.
+func (s *Server) QuestSnapshot(ctx context.Context) any {
+	if s == nil || s.Goal == nil {
+		return nil
+	}
+	g, err := s.Goal.Get(ctx)
+	if err != nil || g == nil || g.Title == "" {
+		return nil
+	}
+	if s.Tasks == nil || s.Tasks.Store == nil {
+		return questView{Goal: g, Percent: g.Percent(), Bar: g.Bar(), Kinds: g.AllowedKinds(), ExpectedOpen: map[string]int{}, ExpectedDone: map[string]int{}}
+	}
+	return s.quest(ctx, g)
 }
 
 func (s *Server) quest(ctx context.Context, g *goal.Goal) questView {

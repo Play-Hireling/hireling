@@ -15,7 +15,7 @@
 //	HERMES_BIN                hermes executable (default: hermes)
 //	HIRELING_SERVER / REGION  where this container runs (default: the profile's home_server / region)
 //	FRONTDESK_URL            http://tavern-core:8080
-//	FRONTDESK_ALLOW_HTTP     "1" allows that plain http URL (Compose sets it; the desk is on the internal network)
+//	FRONTDESK_ALLOW_HTTP     exactly "1" allows that plain http URL (Compose sets it; the desk is on the internal network). Any other value does not.
 //	FRONTDESK_TOKEN_<ID>     this hireling's front desk token (falls back to FRONTDESK_AGENT_TOKEN)
 //	CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET   optional, when the desk sits behind Cloudflare Access
 //	DEEPSEEK_API_KEY          read by Hermes, never by this program
@@ -318,6 +318,17 @@ func tavernClient(agent string) loop.UsageReporter {
 	return &tavern.Client{BaseURL: url, Agent: agent}
 }
 
+// noteAllowHTTP is true only when FRONTDESK_ALLOW_HTTP is exactly "1".
+// That is one log line at process start, so an operator can see the
+// plain-http exception is on. Any other value stays quiet and does not allow it.
+func noteAllowHTTP(logger *log.Logger, v string) bool {
+	if !frontdesk.AllowHTTPEnv(v) {
+		return false
+	}
+	logger.Printf("frontdesk: FRONTDESK_ALLOW_HTTP=1; plain http to a non-loopback host is allowed")
+	return true
+}
+
 func build(logger *log.Logger) (*loop.Loop, error) {
 	id := env("HIRELING_AGENT", "test")
 	dir := filepath.Join(env("HIRELING_AGENTS_DIR", "/agents"), id)
@@ -340,12 +351,13 @@ func build(logger *log.Logger) (*loop.Loop, error) {
 	if token == "" {
 		token = os.Getenv("FRONTDESK_AGENT_TOKEN")
 	}
+	allowHTTP := noteAllowHTTP(logger, os.Getenv("FRONTDESK_ALLOW_HTTP"))
 	client := &frontdesk.Client{
 		BaseURL:        os.Getenv("FRONTDESK_URL"),
 		Token:          token,
 		CFAccessID:     os.Getenv("CF_ACCESS_CLIENT_ID"),
 		CFAccessSecret: os.Getenv("CF_ACCESS_CLIENT_SECRET"),
-		AllowHTTP:      os.Getenv("FRONTDESK_ALLOW_HTTP") == "1",
+		AllowHTTP:      allowHTTP,
 	}
 	// A9: every value named in profile.secrets (plus the Access token) is masked
 	// wherever text leaves the container.

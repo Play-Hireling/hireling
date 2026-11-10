@@ -1,7 +1,8 @@
 # Hireling — a tavern in a box.
 #
 #   cp .env.example .env && ./scripts/init-env.sh   # writes random Front Desk tokens
-#   $EDITOR .env                                    # paste DEEPSEEK_API_KEY
+#   ${EDITOR:-nano} .env                            # paste DEEPSEEK_API_KEY (vi .env if nano is missing)
+#   ./scripts/preflight.sh                          # exit 0, or run the iptables-legacy command it prints
 #   docker compose up -d --build                    # Innkeeper + Scriptwriter + Dev
 #   ./bin/tavern order innkeeper "Plan a launch post for our new feature"
 #

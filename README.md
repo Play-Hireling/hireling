@@ -43,16 +43,17 @@ Multi-agent setups are easy to demo and hard to run all day. Hireling is the bor
 
 ## Quickstart
 
-You need Docker with Compose v2 and a [DeepSeek API key](https://platform.deepseek.com/).
+Self-host the engine and the panel: tavern-core, the hirelings, the owner panel, and the orders API. The pixel-art tavern is not in this repository and this quickstart does not serve it. Play that game at [playhireling.com/play](https://playhireling.com/play/). You need Docker with Compose v2 and a [DeepSeek API key](https://platform.deepseek.com/).
 
 ```bash
 git clone https://github.com/Play-Hireling/hireling.git && cd hireling
 ./scripts/init-env.sh                 # creates .env with random Front Desk tokens
 ${EDITOR:-nano} .env                  # set DEEPSEEK_API_KEY=sk-…  (never commit .env)
+./scripts/preflight.sh                # exit 0, or run the iptables-legacy command it prints
 docker compose up -d --build          # Innkeeper + Scriptwriter + Dev
 
 curl -fsS http://127.0.0.1:8080/healthz   # {"status":"ok",...}
-# The tavern itself: http://127.0.0.1:8080/
+# Owner panel (not the pixel-art tavern): http://127.0.0.1:8080/
 
 ./bin/tavern order innkeeper "Plan a launch post for our new feature, due Friday"
 ./bin/tavern status                   # who is doing what

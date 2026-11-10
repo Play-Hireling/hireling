@@ -18,7 +18,8 @@ Each hireling is capped at 512 MB and ~0.5 CPU; idle it uses ~150 MB, during a t
 # Ubuntu/Debian
 curl -fsSL https://get.docker.com | sh
 git clone https://github.com/Play-Hireling/hireling.git /opt/hireling && cd /opt/hireling
-./scripts/init-env.sh && $EDITOR .env
+./scripts/init-env.sh && ${EDITOR:-nano} .env
+./scripts/preflight.sh
 docker compose up -d --build
 ```
 

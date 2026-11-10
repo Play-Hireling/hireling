@@ -15,8 +15,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
@@ -46,7 +46,7 @@ type Config struct {
 //
 //	FRONTDESK_URL      base URL (falls back to TAVERN_URL, then DefaultURL)
 //	FRONTDESK_OWNER_TOKEN  the owner token (FRONTDESK_TOKEN is accepted as a fallback)
-//	FRONTDESK_ALLOW_HTTP=1  allow http:// to a non-loopback host
+//	FRONTDESK_ALLOW_HTTP    exactly "1" allows http:// to a host other than 127.0.0.1 or ::1. Any other value does not.
 //	CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET  optional
 func FromEnv(getenv func(string) string) (Config, error) {
 	first := func(keys ...string) string {
@@ -62,7 +62,8 @@ func FromEnv(getenv func(string) string) (Config, error) {
 		Token:          first("FRONTDESK_OWNER_TOKEN", "FRONTDESK_TOKEN"),
 		CFAccessID:     first("CF_ACCESS_CLIENT_ID"),
 		CFAccessSecret: first("CF_ACCESS_CLIENT_SECRET"),
-		AllowHTTP:      first("FRONTDESK_ALLOW_HTTP") == "1",
+		// Exact "1" only. "true", "yes", and "1 " must not enable plain http.
+		AllowHTTP: getenv("FRONTDESK_ALLOW_HTTP") == "1",
 	}
 	if c.URL == "" {
 		c.URL = DefaultURL
@@ -102,11 +103,22 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// loopback accepts loopback IP literals only: a name such as localhost is
-// whatever the hosts file says it is.
+// loopback accepts exactly 127.0.0.1 and ::1. A name such as localhost is
+// whatever the hosts file says it is. The rest of 127.0.0.0/8, a shorthand
+// such as 127.1, IPv4-mapped IPv6 (::ffff:127.0.0.1), and a userinfo trick
+// such as 127.0.0.1@evil are not this machine's loopback address.
 func loopback(host string) bool {
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	if host == "" || strings.ContainsAny(host, "@/%") {
+		return false
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil || addr.Zone() != "" || addr.Is4In6() {
+		return false
+	}
+	if addr.Is4() {
+		return addr == netip.AddrFrom4([4]byte{127, 0, 0, 1})
+	}
+	return addr == netip.IPv6Loopback()
 }
 
 // Client calls one tavern with the owner token.
