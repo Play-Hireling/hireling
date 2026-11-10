@@ -10,7 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -56,7 +58,11 @@ type Client struct {
 	Token          string
 	CFAccessID     string
 	CFAccessSecret string
-	HTTP           *http.Client
+	// AllowHTTP permits http:// to a host that is not a loopback IP.
+	// Compose sets FRONTDESK_ALLOW_HTTP=1: the desk is http://tavern-core:8080
+	// on the internal network. Leave it unset for a desk on the public internet.
+	AllowHTTP bool
+	HTTP      *http.Client
 }
 
 // ErrNotConfigured is returned when the base URL or token is missing; the
@@ -67,10 +73,25 @@ func (c *Client) ready() error {
 	if c.BaseURL == "" || c.Token == "" {
 		return ErrNotConfigured
 	}
-	if !strings.HasPrefix(c.BaseURL, "https://") && !strings.HasPrefix(c.BaseURL, "http://localhost") && !strings.HasPrefix(c.BaseURL, "http://127.0.0.1") {
+	u, err := url.Parse(c.BaseURL)
+	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
 		return fmt.Errorf("frontdesk: FRONTDESK_URL must be https://")
 	}
+	if u.User != nil {
+		return fmt.Errorf("frontdesk: FRONTDESK_URL must not carry credentials")
+	}
+	// A name such as localhost is whatever the hosts file says, so only
+	// loopback IP literals are trusted without https. The Compose network
+	// opts in with AllowHTTP (FRONTDESK_ALLOW_HTTP=1).
+	if u.Scheme == "http" && !loopbackHost(u.Hostname()) && !c.AllowHTTP {
+		return fmt.Errorf("frontdesk: FRONTDESK_URL must be https:// (plain http is only allowed to 127.0.0.1 or ::1; set FRONTDESK_ALLOW_HTTP=1 on the internal tavern network)")
+	}
 	return nil
+}
+
+func loopbackHost(host string) bool {
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body any, out any) error {

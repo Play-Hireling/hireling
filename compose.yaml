@@ -35,6 +35,11 @@ x-hireling-env: &hireling-env
   TAVERN_URL: http://tavern-core:8080
   REDIS_URL: redis://redis:6379/0
   FRONTDESK_URL: http://tavern-core:8080
+  # The runtime accepts plain http only for a loopback IP, unless this is set.
+  # The desk lives on the internal network under the name above; the flag is
+  # not a secret and is not read from .env. Leave it unset on a hireling that
+  # calls a desk over the public internet (that desk must be https).
+  FRONTDESK_ALLOW_HTTP: "1"
   FRONTDESK_AGENT_TOKEN: ${FRONTDESK_AGENT_TOKEN:?run ./scripts/init-env.sh}
   LEDGER_WRITER_URL: http://ledger-writer:8090
   DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?paste your DeepSeek key in .env}
