@@ -1,8 +1,11 @@
 "use strict";
 const $ = (sel) => document.querySelector(sel);
 const token = document.getElementById("token");
-token.value = localStorage.getItem("tavernToken") || "";
-token.addEventListener("change", () => localStorage.setItem("tavernToken", token.value.trim()));
+// The owner token lives in this tab only. There is no "remember" option.
+// Drop a token an older panel wrote to localStorage.
+try { localStorage.removeItem("tavernToken"); } catch (e) { /* private mode */ }
+token.value = sessionStorage.getItem("tavernToken") || "";
+token.addEventListener("change", () => sessionStorage.setItem("tavernToken", token.value.trim()));
 
 // Render strictly via text nodes so a hireling's words can never inject markup.
 function el(tag, text, cls) {

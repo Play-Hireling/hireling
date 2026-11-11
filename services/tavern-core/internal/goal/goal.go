@@ -209,7 +209,8 @@ func (s *Service) Report(ctx context.Context, by string, current float64) (*Goal
 	if err != nil {
 		return nil, err
 	}
-	if strings.ToLower(strings.TrimSpace(by)) != g.Source {
+	// X-Hireling is compared exactly. "Owner" is not the source "owner".
+	if strings.TrimSpace(by) != g.Source {
 		return nil, ErrNotSource
 	}
 	if math.IsNaN(current) || math.IsInf(current, 0) {

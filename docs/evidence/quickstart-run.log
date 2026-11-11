@@ -31,7 +31,7 @@ Docker Compose version v5.7.0
 IMAGES_BEFORE 0
 LEGACY_FORWARD
 -P FORWARD DROP
--A FORWARD -i br+ -o br+ -j ACCEPT
+-A FORWARD -i br-hireling -o br-hireling -j ACCEPT
 -A FORWARD -j DOCKER-USER
 -A FORWARD -j DOCKER-FORWARD
 CLOCK_START 2026-11-10T18:47:55Z
@@ -48,7 +48,7 @@ editor: set DEEPSEEK_API_KEY to a placeholder (value not printed)
 ===== STEP edit-env END rc=0 elapsed=0s =====
 ===== STEP preflight START 2026-11-10T18:47:55Z =====
 preflight: reading iptables-legacy needs root.
-preflight: ok (iptables-legacy FORWARD is DROP, and br+ to br+ is already accepted)
+preflight: ok (iptables-legacy FORWARD is DROP, and br-hireling to br-hireling is already accepted)
 ===== STEP preflight END rc=0 elapsed=0s =====
 ===== STEP compose-up START 2026-11-10T18:47:55Z =====
  Image busybox:1.37 Pulling 

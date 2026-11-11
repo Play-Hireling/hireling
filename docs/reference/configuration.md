@@ -19,12 +19,13 @@ Everything is configured with environment variables (per service) and the hireli
 | `FRONTDESK_ALLOW_HTTP` | — | Exactly `1` allows `http://` to a host other than `127.0.0.1` or `::1`. `true`, `yes`, and `1 ` do not. Compose sets `1`, because the desk is on the internal network. Leave it unset when the desk is on the public internet. `localhost`, other `127.x` addresses, `127.0.0.1@evil`, and IPv4-mapped IPv6 are not treated as that loopback |
 | `FRONTDESK_TOKEN_<ID>` | — | This hireling's token (`<ID>` = upper-case id, `-` → `_`) |
 | `FRONTDESK_AGENT_TOKEN` | — | Shared token, used when the per-hireling one is unset |
-| `FRONTDESK_OWNER_TOKEN` | — | The owner bearer tavern-core already uses. The runtime sends it on `/tasks`, `PUT /goal` and `/actions/*`. Compose passes the same `.env` value the core has. Not logged |
+| `FRONTDESK_OWNER_TOKEN` | — | The owner bearer tavern-core already uses. The runtime sends it on `/tasks`, `PUT /goal`, `/actions/*`, `POST /goal/progress`, `POST /asks`, `POST /asks/opened` and `POST /agents/{id}/usage`. Compose passes the same `.env` value into every hireling. Not logged. Residual: that token is in every hireling's environment |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | — | Only when the Front Desk sits behind Cloudflare Access |
 | `TAVERN_URL` | — | tavern-core (usage, quest, tasks, leases). Unset = local-only usage |
 | `REDIS_URL` | — | The bar. Unset = no inbox loop |
 | `TAVERN_SHARED` | `/tavern/shared` | The common table |
 | `DEEPSEEK_API_KEY` | — | **Required.** Read by Hermes, never by the runtime |
+| `HIRELING_MODEL_BASE_URL` | `https://api.deepseek.com/v1` | OpenAI-compatible model base URL. Empty keeps the default, so a stub can stand in for DeepSeek |
 | `OPENROUTER_API_KEY` | — | Enables the per-turn fallback |
 | `COMPOSIO_API_KEY`, `COMPOSIO_USER_ID` | —, `hireling-tavern` | Hands (accounts) |
 | `COMPOSIO_BASE_URL` | Composio's | Override for testing |
@@ -44,6 +45,7 @@ Everything is configured with environment variables (per service) and the hireli
 | `FRONTDESK_AGENT_TOKEN` | — | Any hireling of this tavern may use it |
 | `FRONTDESK_TOKEN_<ID>` | — | A hireling's own token |
 | `GOAL_TITLE`, `GOAL_TARGET`, `GOAL_CURRENCY`, `GOAL_SOURCE`, `GOAL_KINDS`, `GOAL_PERIOD` | —, 0, `USD`, `owner`, default kinds, — | Seed the quest on first boot only; later changes via `PUT /goal` |
+| `TAVERN_CLIENT_DIR` | `/tavern/client` | Self-host game files served at `/tavern/`. Empty directory means 404; the panel at `/` still works |
 
 ## tavern-mcp (on your machine)
 

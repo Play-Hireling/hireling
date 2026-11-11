@@ -64,7 +64,18 @@ curl -fsS http://127.0.0.1:8080/healthz   # {"status":"ok",...}
 ./bin/tavern decisions                # what is waiting on you
 ```
 
-Full walkthrough, profiles and troubleshooting: **[docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)**.
+Full walkthrough, profiles and troubleshooting: **[docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)**. A clean run of that default path, from zero images, took 95 s ([evidence](docs/evidence/quickstart-run.md)).
+
+The pixel-art client is not published. Until the license holder ([Ashar Software LTDA](LICENSE-CLIENT.md)) decides to publish an image, build one locally. `docker compose up` does not start it. `docker compose --profile game` uses `hireling/client:local` (or `HIRELING_CLIENT_IMAGE` if you set it) and does not pull that image. Without the local build, that command fails on this machine and does not contact a registry.
+
+```bash
+# in a checkout of Play-Hireling/playhireling, on main:
+npm run build:selfhost
+# then, in this repository:
+scripts/pack-client.sh /path/to/playhireling/dist-selfhost   # hireling/client:local, not pushed
+HIRELING_CLIENT_IMAGE=hireling/client:local docker compose --profile game up -d --build
+# http://127.0.0.1:8080/tavern/
+```
 
 ## How it works
 

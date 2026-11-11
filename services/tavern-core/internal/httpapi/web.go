@@ -7,7 +7,7 @@ import (
 
 // clientHTML is the owner panel (OS5). Its script and stylesheet are separate
 // files in this binary (client.js, client.css) so the page can run under
-// ContentSecurityPolicy without 'unsafe-inline'. The page loads nothing except
+// PanelContentSecurityPolicy without 'unsafe-inline'. The page loads nothing except
 // those files and tavern-core's own /api/status. It shows the party, the
 // hirelings' balloons (their current turn), the open decisions and the
 // conversations at the table, plus the quest bar. It is not the pixel-art

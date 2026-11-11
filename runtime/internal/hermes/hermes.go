@@ -104,6 +104,20 @@ type Options struct {
 	// Gate is the pre_tool_call command (D1), e.g. `/usr/local/bin/hireling
 	// gate --agent dev`. Empty = no gate (tests and local smoke runs only).
 	Gate string
+	// BaseURL overrides DeepSeekBaseURL when set (HIRELING_MODEL_BASE_URL).
+	// Empty keeps https://api.deepseek.com/v1. The value is an OpenAI-compatible
+	// endpoint, so a test can point a turn at a stub.
+	BaseURL string
+}
+
+// BaseURL returns the OpenAI-compatible model endpoint. override replaces
+// DeepSeekBaseURL when it is non-empty. A trailing slash is dropped.
+func BaseURL(override string) string {
+	v := strings.TrimSpace(override)
+	if v == "" {
+		return DeepSeekBaseURL
+	}
+	return strings.TrimRight(v, "/")
 }
 
 // Render builds the config for a profile. Model routing is the profile's
@@ -112,7 +126,7 @@ func Render(p *profile.Profile, o Options) *Config {
 	c := &Config{}
 	c.Model.Provider = "custom"
 	c.Model.Default = profile.Models[p.Model]
-	c.Model.BaseURL = DeepSeekBaseURL
+	c.Model.BaseURL = BaseURL(o.BaseURL)
 	c.Model.KeyEnv = "DEEPSEEK_API_KEY"
 	// A8: command approval stays on. Unattended turns can never wait for a
 	// human, so a dangerous command is denied instead of approved.

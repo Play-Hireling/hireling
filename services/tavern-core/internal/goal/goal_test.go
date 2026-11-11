@@ -27,6 +27,12 @@ func TestQuest(t *testing.T) {
 	if _, err := s.Report(ctx, "innkeeper", 15000); !errors.Is(err, ErrNotSource) {
 		t.Fatalf("hireling moved the bar: %v", err)
 	}
+	if _, err := s.Report(ctx, "Owner", 15000); !errors.Is(err, ErrNotSource) {
+		t.Fatalf("X-Hireling Owner matched source owner: %v", err)
+	}
+	if _, err := s.Set(ctx, "Owner", Define{Title: "Net revenue", Target: 1}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("X-Hireling Owner defined the quest: %v", err)
+	}
 	g, err = s.Report(ctx, "owner", 15000)
 	if err != nil || g.Current != 15000 || g.Percent() != 12.5 || g.UpdatedBy != "owner" {
 		t.Fatalf("%v %+v", err, g)

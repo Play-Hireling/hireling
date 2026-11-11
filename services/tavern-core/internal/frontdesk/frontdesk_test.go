@@ -99,6 +99,18 @@ func TestStatusNoStore(t *testing.T) {
 	if got := res.Header.Get("Cache-Control"); got != "no-store" {
 		t.Fatalf("Cache-Control = %q, want no-store", got)
 	}
+	denied, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/status", nil)
+	no, err := http.DefaultClient.Do(denied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer no.Body.Close()
+	if no.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status without token: %d", no.StatusCode)
+	}
+	if got := no.Header.Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("401 Cache-Control = %q, want no-store", got)
+	}
 }
 
 func TestStatusQuestField(t *testing.T) {

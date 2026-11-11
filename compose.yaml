@@ -47,14 +47,16 @@ x-hireling-env: &hireling-env
   FRONTDESK_OWNER_TOKEN: ${FRONTDESK_OWNER_TOKEN:?run ./scripts/init-env.sh}
   LEDGER_WRITER_URL: http://ledger-writer:8090
   DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?paste your DeepSeek key in .env}
+  # OpenAI-compatible base URL. Empty keeps https://api.deepseek.com/v1.
+  HIRELING_MODEL_BASE_URL: ${HIRELING_MODEL_BASE_URL:-}
   OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
   COMPOSIO_API_KEY: ${COMPOSIO_API_KEY:-}
   COMPOSIO_USER_ID: ${COMPOSIO_USER_ID:-hireling-tavern}
 
+# One service builds hireling/runtime:local (agent-innkeeper). The other
+# hirelings use that image and do not build it again. buildx is the
+# recommended builder: `docker buildx build -f runtime/Dockerfile -t hireling/runtime:local --load .`
 x-hireling: &hireling
-  build:
-    context: .
-    dockerfile: runtime/Dockerfile
   image: hireling/runtime:${HIRELING_TAG:-local}
   restart: unless-stopped
   networks: [tavern]
@@ -106,6 +108,11 @@ services:
     ports: ["127.0.0.1:${TAVERN_PORT:-8080}:8080"]
     depends_on:
       redis: { condition: service_healthy }
+      # Profile `game` fills the client volume. When that profile is off,
+      # this dependency is skipped and /tavern/ stays 404.
+      client-init:
+        condition: service_completed_successfully
+        required: false
     environment:
       TAVERN_ADDR: ":8080"
       TAVERN_AGENTS_DIR: /agents
@@ -118,6 +125,7 @@ services:
       GOAL_SOURCE: ${GOAL_SOURCE:-owner}
       GOAL_KINDS: ${GOAL_KINDS:-}
       GOAL_PERIOD: ${GOAL_PERIOD:-}
+      TAVERN_CLIENT_DIR: /tavern/client
     healthcheck:
       test: ["CMD", "/tavern-core", "-healthcheck"]
       interval: 15s
@@ -127,6 +135,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
     read_only: true
+    volumes: ["tavern-client:/tavern/client:ro"]
     deploy:
       resources:
         limits: { cpus: "0.25", memory: 128M }
@@ -169,6 +178,9 @@ services:
   # ---- The party. Copy a block to add a hireling (docs/guides/add-a-hireling.md).
   agent-innkeeper:
     <<: *hireling
+    build:
+      context: .
+      dockerfile: runtime/Dockerfile
     environment:
       <<: *hireling-env
       HIRELING_AGENT: innkeeper
@@ -280,6 +292,22 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
 
+  # Copies the local data-only client image onto tavern-client. The default
+  # tag is hireling/client:local, which scripts/pack-client.sh builds.
+  # pull_policy: never so Compose does not ask a registry for it. Profile
+  # `game` only: a plain `docker compose up` does not start this service.
+  # Publishing an image waits on the license holder (Ashar Software LTDA).
+  # docs/provenance is not in the image. The public notice is /licenses/NOTICE.
+  client-init:
+    profiles: [game]
+    image: ${HIRELING_CLIENT_IMAGE:-hireling/client:local}
+    pull_policy: never
+
+    volumes: ["tavern-client:/out"]
+    restart: "no"
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+
 networks:
   # The only network with container-to-container traffic (core, redis, hirelings,
   # egress, and the optional ledger). The bridge name is fixed so the host
@@ -294,6 +322,7 @@ networks:
 
 volumes:
   redis-data:
+  tavern-client:
   tavern-shared:
   tavern-innkeeper:
   tavern-scriptwriter:

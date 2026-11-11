@@ -15,8 +15,16 @@ import (
 )
 
 func TestRenderRoutesModelFromProfile(t *testing.T) {
-	c := Render(&profile.Profile{ID: "x", Model: "deepseek-v4-pro"}, Options{})
+	p := &profile.Profile{ID: "x", Model: "deepseek-v4-pro"}
+	c := Render(p, Options{})
 	if c.Model.Default != "deepseek-v4-pro" || c.Model.Provider != "custom" || c.Model.BaseURL != DeepSeekBaseURL {
+		t.Fatalf("model: %+v", c.Model)
+	}
+	over := Render(p, Options{BaseURL: "http://127.0.0.1:9/v1/"})
+	if over.Model.BaseURL != "http://127.0.0.1:9/v1" {
+		t.Fatalf("override base url: %q", over.Model.BaseURL)
+	}
+	if BaseURL("") != DeepSeekBaseURL || BaseURL("  ") != DeepSeekBaseURL {
 		t.Fatalf("%+v", c.Model)
 	}
 	if c.Approvals.SingleQueryMode != "deny" || len(c.Approvals.Deny) == 0 {

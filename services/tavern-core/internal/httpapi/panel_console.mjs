@@ -45,7 +45,8 @@ try {
       }
     });
     await page.addInitScript((t) => {
-      localStorage.setItem('tavernToken', t);
+      sessionStorage.setItem('tavernToken', t);
+      try { localStorage.removeItem('tavernToken'); } catch (e) { /* ignore */ }
       window.__csp = [];
       document.addEventListener('securitypolicyviolation', (e) => {
         window.__csp.push(e.violatedDirective + ' ' + e.blockedURI + ' ' + e.sample);

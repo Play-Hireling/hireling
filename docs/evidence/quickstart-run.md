@@ -15,11 +15,13 @@ This replaces the earlier **79s** figure. That number was a later run on the sam
 
 `iptables-legacy` `FORWARD` policy was `DROP`, and `iptables --version` reported `nf_tables`. On a user-defined bridge (not `docker0`), `ping` between two containers lost 100% of packets until one legacy `ACCEPT` was inserted. Policy stayed `DROP`. nft `FORWARD` was not modified. The timed run below started only after that. No further firewall change was made during the clock.
 
+The log's firewall transcript names `br-hireling`. An earlier transcription wrote that interface as `br+`; that abbreviation was corrected in the log so it matches the rule `preflight.sh` prints.
+
 The 95s figure is the image pull and compile (`docker compose up -d --build` was 94s of the 95s, from zero images and an empty builder cache). Pinning the tavern bridge to `br-hireling` does not change that build, so this number still stands. The log of that run is unchanged. The rule to use now is only `-i br-hireling -o br-hireling`, which is what `preflight.sh` prints. A later check on the same machine, with `FORWARD` still `DROP` and that rule absent: ping on a bridge created with `com.docker.network.bridge.name=br-hireling` lost 100% of packets; `sudo ./scripts/preflight.sh` exited 1 and the only suggested rule was `br-hireling`; after that command, the same ping had 0% loss, the policy was still `DROP`, and `sudo ./scripts/preflight.sh` exited 0. Without root, `./scripts/preflight.sh` exited 2 and did not run `sudo`.
 
 ## Timed run
 
-Wall clock from `./scripts/init-env.sh` through the post-order `./bin/tavern status`: **95s** (2026-11-10T18:47:55Z to 2026-11-10T18:49:30Z).
+Wall clock from `./scripts/init-env.sh` through the post-order `./bin/tavern status`: **95 s** (2026-11-10T18:47:55Z to 2026-11-10T18:49:30Z).
 
 | Step | Result | Time |
 | --- | --- | --- |

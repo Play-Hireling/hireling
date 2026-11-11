@@ -23,6 +23,15 @@ func TestClientServed(t *testing.T) {
 	srv := httptest.NewServer(s.Handler())
 	defer srv.Close()
 
+	hz, err := http.Get(srv.URL + "/healthz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hz.Body.Close()
+	if !strings.HasPrefix(hz.Header.Get("Content-Type"), "application/json") || hz.Header.Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("JSON nosniff: %q %q", hz.Header.Get("Content-Type"), hz.Header.Get("X-Content-Type-Options"))
+	}
+
 	res, err := http.Get(srv.URL + "/")
 	if err != nil {
 		t.Fatal(err)
@@ -34,7 +43,7 @@ func TestClientServed(t *testing.T) {
 	if ct := res.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
 		t.Fatalf("content-type = %q", ct)
 	}
-	if got := res.Header.Get("Content-Security-Policy"); got != ContentSecurityPolicy {
+	if got := res.Header.Get("Content-Security-Policy"); got != PanelContentSecurityPolicy {
 		t.Fatalf("CSP = %q", got)
 	}
 	if res.Header.Get("X-Content-Type-Options") != "nosniff" || res.Header.Get("Referrer-Policy") != "no-referrer" {
@@ -75,6 +84,9 @@ func TestClientServed(t *testing.T) {
 		if asset.path == "/client.js" && !strings.Contains(string(ab), "no quest set yet") {
 			t.Fatal("client.js missing the empty quest state")
 		}
+		if asset.path == "/client.js" && (!strings.Contains(string(ab), "sessionStorage") || strings.Contains(string(ab), "localStorage.setItem")) {
+			t.Fatal("client.js must keep the token in sessionStorage and must not remember it")
+		}
 	}
 	if strings.Contains(body, `api("/api/quest")`) || strings.Contains(body, "Error(\"missing\")") {
 		t.Fatalf("panel still fetches /api/quest or treats 404 as missing:\n%s", body)
@@ -106,7 +118,7 @@ func TestHTMLSecurityOnEveryHTMLResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 	res.Body.Close()
-	if res.Header.Get("Content-Security-Policy") != ContentSecurityPolicy ||
+	if res.Header.Get("Content-Security-Policy") != PanelContentSecurityPolicy ||
 		res.Header.Get("X-Content-Type-Options") != "nosniff" ||
 		res.Header.Get("Referrer-Policy") != "no-referrer" {
 		t.Fatalf("other HTML headers: %v", res.Header)
