@@ -4,7 +4,7 @@ Proof for issue #36: `http://127.0.0.1:8080/` opens the tavern when a client bun
 
 ## What ran
 
-The real `tavern-core` handler served the real `dist-selfhost` build from a checkout of `Play-Hireling/playhireling` (`npm run build:selfhost`) through `TAVERN_CLIENT_DIR`, with the same `Security.go` policies as the binary. The API was a Playwright fixture (`GET /api/status`, 401 without `Authorization`); no production host and no DeepSeek call. Chromium at 1440×900 and 390×844, `deviceScaleFactor: 1`, touch emulation at 390.
+The real `tavern-core` handler served the real `dist-selfhost` build from a checkout of `Play-Hireling/playhireling` (`npm run build:selfhost`) through `TAVERN_CLIENT_DIR`, with the same `Security.go` policies as the binary. The API was a Playwright fixture (`GET /api/status`, 401 without `Authorization`); no production host and no DeepSeek call. Chromium at 1440×900 and 390×844, `deviceScaleFactor: 1`, touch emulation at 390. The game accepted the owner token, reached the playing state, and the player walked with `ArrowRight` at both sizes.
 
 | Case | `/` | `/panel/` | `/tavern/` |
 | --- | --- | --- | --- |
