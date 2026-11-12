@@ -7,18 +7,28 @@
 #   ghcr.io/<owner>/hireling-ledger-writer
 #   ghcr.io/<owner>/hireling-gbrain
 #
+# Every image is a multi-arch manifest list (linux/amd64 + linux/arm64), carries
+# SLSA provenance and an SBOM attestation, and is signed keyless with cosign by
+# digest — the same pattern as .github/workflows/client-image.yml.
+#
 # Publishing is off. The publish job runs only when ALL of these are true:
 #   1. Someone starts this workflow by hand (workflow_dispatch), and
 #   2. they set the input `publish` to true (the default is false), and
 #   3. the repository variable RELEASE_PUBLISH exists and equals `true`.
 # That variable is not created by this file. A push of a v* tag only builds.
 #
+# A manual run from a branch publishes only the `sha-` tag, which is how the
+# multi-arch manifest and the signature are tested without a release version.
+# The `<tag>`/`v*` tag is only produced by a tag ref (type=ref,event=tag), and
+# `latest` is never produced.
+#
 # To enable publishing later (no workflow edit):
 #   Settings → Secrets and variables → Actions → Variables
 #   Name: RELEASE_PUBLISH    Value: true
 #   Then: Actions → Release images → Run workflow → publish = true.
 # Do not put a token in that variable. The job uses the built-in GITHUB_TOKEN,
-# and only that job has packages: write.
+# and only that job has packages: write. `id-token: write` is what lets cosign
+# prove the run identity without a stored key.
 
 name: Release images
 
@@ -41,6 +51,9 @@ concurrency:
   group: release-images-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  PLATFORMS: linux/amd64,linux/arm64
+
 jobs:
   build:
     name: Build ${{ matrix.image.name }}
@@ -62,6 +75,12 @@ jobs:
         with:
           persist-credentials: false
 
+      # arm64 is emulated: every Dockerfile runs its compiler inside the image,
+      # so the build needs the binfmt handlers from QEMU, not just Go's
+      # cross-compile. Warm the cache here so the publish job does not repeat it.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -76,17 +95,22 @@ jobs:
           flavor: |
             latest=false
 
-      - name: Build (do not push)
+      # No `load: true`: a manifest list cannot be loaded into the local engine.
+      # This step is the "both architectures compile" gate; the publish job
+      # builds the same targets again from the cache and pushes them.
+      - name: Build (both platforms, do not push)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ${{ matrix.image.file }}
+          platforms: ${{ env.PLATFORMS }}
           push: false
-          load: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          provenance: false
-          sbom: false
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
 
   publish:
     name: Publish ${{ matrix.image.name }}
@@ -98,6 +122,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # keyless cosign: the OIDC token is the identity, nothing is stored.
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -112,6 +138,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -134,13 +163,43 @@ jobs:
           flavor: |
             latest=false
 
-      - name: Build and push
+      - name: Build and push (manifest list)
+        id: push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ${{ matrix.image.file }}
+          platforms: ${{ env.PLATFORMS }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          provenance: false
-          sbom: false
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.1
+        with:
+          cosign-release: v3.1.4
+
+      # Signs the manifest list, by digest: the tag can be moved, the digest
+      # cannot. Same command as the client image.
+      - name: Sign the image (keyless)
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          name=$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          cosign sign --yes "ghcr.io/${name}-${{ matrix.image.name }}@${DIGEST}"
+
+      # The run log is the evidence: the two platforms, the attestations, and a
+      # signature that verifies against this workflow's own identity.
+      - name: Verify the manifest list and the signature
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          name=$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          ref="ghcr.io/${name}-${{ matrix.image.name }}@${DIGEST}"
+          docker buildx imagetools inspect "$ref"
+          cosign verify "$ref" \
+            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
