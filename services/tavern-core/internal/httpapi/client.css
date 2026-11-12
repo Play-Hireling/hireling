@@ -14,6 +14,11 @@
   }
   header h1 { font-size: 18px; margin: 0; letter-spacing: .03em; }
   header h1 .dot { color: var(--gold); }
+  header h1 .tag {
+    font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted); border: 1px solid var(--line); border-radius: 999px;
+    padding: 2px 8px; margin-left: 6px; vertical-align: 2px;
+  }
   header .spacer { flex: 1; }
   header input {
     background: #0f0c09; color: var(--ink); border: 1px solid var(--line);
@@ -30,6 +35,24 @@
     padding: 12px 14px; color: var(--muted); font-size: 13px;
   }
   .hint code { color: var(--gold); }
+  .notice {
+    background: var(--panel); border: 1px dashed var(--gold); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 22px; font-size: 14px;
+  }
+  .notice h2 { color: var(--gold); margin-bottom: 8px; }
+  .notice p { margin: 0 0 10px; }
+  .notice p:last-child { margin-bottom: 0; }
+  .notice code, .route code { color: var(--gold); }
+  .notice pre {
+    background: #0f0c09; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; margin: 0 0 10px; overflow-x: auto; font-size: 12.5px;
+  }
+  .notice pre code { color: var(--ink); }
+  .route {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 14px; margin: 0 0 18px; font-size: 13px; color: var(--muted);
+  }
+  .route a { color: var(--gold); font-weight: 600; }
 
   /* quest bar */
   .quest {
@@ -90,3 +113,4 @@
   .muted { color: var(--muted); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) { header h1 .tag { display: none; } }

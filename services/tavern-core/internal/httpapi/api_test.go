@@ -565,8 +565,12 @@ func TestAutonomyFirstAsks(t *testing.T) {
 	p.Autonomy.OwnerDecides = profile.HardDeny
 	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
 	g := policy.NewMemoryGrants()
+	// The asks store has its own clock; it must be the test's clock too, or a
+	// card opened at `now` looks a week old to Join and is not joined.
+	asksMem := asks.NewMemory()
+	asksMem.Now = func() time.Time { return now }
 	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(),
-		Grants: g, Asks: asks.NewMemory(), Now: func() time.Time { return now }}
+		Grants: g, Asks: asksMem, Now: func() time.Time { return now }}
 	srv := listen(s, testOwnerToken)
 	defer srv.Close()
 	pre := func(body string) AskVerdict {

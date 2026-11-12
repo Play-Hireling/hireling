@@ -45,7 +45,7 @@ Everything is configured with environment variables (per service) and the hireli
 | `FRONTDESK_AGENT_TOKEN` | — | Any hireling of this tavern may use it |
 | `FRONTDESK_TOKEN_<ID>` | — | A hireling's own token |
 | `GOAL_TITLE`, `GOAL_TARGET`, `GOAL_CURRENCY`, `GOAL_SOURCE`, `GOAL_KINDS`, `GOAL_PERIOD` | —, 0, `USD`, `owner`, default kinds, — | Seed the quest on first boot only; later changes via `PUT /goal` |
-| `TAVERN_CLIENT_DIR` | `/tavern/client` | Self-host game files served at `/tavern/`. Empty directory means 404; the panel at `/` still works |
+| `TAVERN_CLIENT_DIR` | `/tavern/client` | Self-host game files served at `/tavern/`. When it holds an `index.html`, `/` redirects there and the owner panel is at `/panel/`; without it, `/` is the panel, which says how to build the client, and `/tavern/` is 404 |
 
 ## tavern-mcp (on your machine)
 

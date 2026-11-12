@@ -46,6 +46,15 @@
 | `outside` | egress, gbrain, ledger-writer | yes |
 | `desk` | tavern-core | yes (only to publish `127.0.0.1:8080`) |
 
+## Routes on `127.0.0.1:8080`
+
+| Route | What it serves |
+| --- | --- |
+| `GET /` | With a client bundle (`TAVERN_CLIENT_DIR/index.html`), a 307 to `/tavern/`; without one, the owner panel |
+| `GET /panel/` | The owner panel, in every setup (`/panel` redirects there) |
+| `GET /tavern/` | The self-host client bundle, if mounted; 404 otherwise |
+| `GET /api/*` | The Front Desk API; everything the owner CLI and the runtimes use |
+
 A hireling has no default route. Its `HTTP(S)_PROXY` points at `egress`, which identifies the caller by reverse DNS of its container name (`…-agent-<id>-N`), loads that profile's allowlist and refuses everything else (ports 80/443, no IP literals). There is deliberately **no identity cache**: Docker reuses IPs immediately when a container goes away.
 
 ## Repository layout

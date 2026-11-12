@@ -1,6 +1,6 @@
 # Quickstart
 
-Self-host the engine and the panel. In about ten minutes you get tavern-core, three hirelings (**Innkeeper**, **Scriptwriter** and **Dev**), the owner panel, and the orders API (`./bin/tavern` and `http://127.0.0.1:8080/api/`). The default commands below do not start the pixel-art tavern. That game is not in this repository. A clean run of those commands, from zero images, is recorded at 95 s in [the evidence log](../evidence/quickstart-run.md). The public demo is at [playhireling.com/play](https://playhireling.com/play/). The optional [`game` profile](#optional-pixel-art-client) serves a client you build yourself at `/tavern/`.
+Self-host the engine and the panel. In about ten minutes you get tavern-core, three hirelings (**Innkeeper**, **Scriptwriter** and **Dev**), the owner panel, and the orders API (`./bin/tavern` and `http://127.0.0.1:8080/api/`). The default commands below do not start the pixel-art tavern. That game is not in this repository. A clean run of those commands, from zero images, is recorded at 95 s in [the evidence log](../evidence/quickstart-run.md). The public demo is at [playhireling.com/play](https://playhireling.com/play/). The optional [`game` profile](#optional-pixel-art-client) serves a client you build yourself, and then `http://127.0.0.1:8080/` opens the tavern; the owner panel stays at `/panel/`.
 
 ## What you need
 
@@ -64,8 +64,9 @@ curl -fsS http://127.0.0.1:8080/healthz
 # {"agents":["dev","innkeeper","paid-traffic","scriptwriter","social-media","test"],"status":"ok"}
 
 curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/
-# 200 — the owner panel. Open http://127.0.0.1:8080/ in a browser on this machine.
-# Party, decisions and the quest bar. Not the pixel-art tavern.
+# 200 — the owner panel. Open http://127.0.0.1:8080/panel/ in a browser on this machine.
+# Party, decisions and the quest bar. Not the pixel-art tavern. Without a client
+# bundle, / also serves this panel and states how to build the game.
 ```
 
 `./bin/tavern health` prints the same JSON. The port is bound to `127.0.0.1` only.
@@ -158,7 +159,7 @@ See [Quest and tasks](../concepts/quest-and-tasks.md).
 
 ## Optional: pixel-art client
 
-The default `docker compose up` does not start the client, and it does not need `HIRELING_CLIENT_IMAGE`. Profile `game` serves a data-only image at `http://127.0.0.1:8080/tavern/` on the same origin as the API. The image name defaults to `hireling/client:local`, which `scripts/pack-client.sh` builds. Compose never pulls that image (`pull_policy: never`). If the tag is not on this machine, `--profile game` fails locally and does not contact a registry. Publishing an image waits on the license holder, Ashar Software LTDA. Do not push one from this checkout.
+The default `docker compose up` does not start the client, and it does not need `HIRELING_CLIENT_IMAGE`. Profile `game` serves a data-only image on the same origin as the API. With that bundle mounted, `http://127.0.0.1:8080/` opens the tavern and the owner panel stays at `http://127.0.0.1:8080/panel/`; `/tavern/` keeps working as the canonical game path. The image name defaults to `hireling/client:local`, which `scripts/pack-client.sh` builds. Compose never pulls that image (`pull_policy: never`). If the tag is not on this machine, `--profile game` fails locally and does not contact a registry. Publishing an image waits on the license holder, Ashar Software LTDA. Do not push one from this checkout.
 
 Build the client from the `main` branch of `Play-Hireling/playhireling` (`npm run build:selfhost`), then pack it locally. Nothing is published:
 
@@ -171,15 +172,15 @@ scripts/pack-client.sh /path/to/playhireling/dist-selfhost
 HIRELING_CLIENT_IMAGE=hireling/client:local docker compose --profile game up -d --build
 ```
 
-`docker buildx` is the recommended builder for `hireling/runtime:local`. Only `agent-innkeeper` builds that image. Open `http://127.0.0.1:8080/tavern/`, paste `FRONTDESK_OWNER_TOKEN` (it stays in `sessionStorage`; there is no remember option) and enter the tavern.
+`docker buildx` is the recommended builder for `hireling/runtime:local`. Only `agent-innkeeper` builds that image. Open `http://127.0.0.1:8080/`, paste `FRONTDESK_OWNER_TOKEN` (it stays in `sessionStorage`; there is no remember option) and enter the tavern. The two route cases, with and without the bundle, are recorded in [the OS5 evidence](../evidence/os5-routing.md).
 
-Give the order in the game at `/tavern/` when that screen accepts one. If it does not, use the CLI, which is the same order:
+Give the order in the game at `/` when that screen accepts one. If it does not, use the CLI, which is the same order:
 
 ```bash
 ./bin/tavern order innkeeper "Plan a launch post for our new feature, due Friday"
 ```
 
-The owner panel at `/` does not grow an order button for this. Answer a decision in the game, or with `./bin/tavern choose`.
+The owner panel at `/panel/` (and at `/` when the client is not installed) does not grow an order button for this. Answer a decision in the game, or with `./bin/tavern choose`.
 
 If you already had a stack from before the bridge was named `br-hireling`, recreate the tavern network (`docker compose down`, and `docker network rm hireling_tavern` if it remains) so the name applies, then `docker compose up -d`.
 

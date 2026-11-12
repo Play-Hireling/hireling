@@ -43,9 +43,9 @@ func TestPanelConsole(t *testing.T) {
 	}
 
 	empty := newOwnerServer(t, true)
-	run := func(srvURL, expect string) {
+	run := func(srvURL, route, expect string) {
 		t.Helper()
-		cmd := exec.Command(node, script, srvURL, testOwnerToken, expect)
+		cmd := exec.Command(node, script, srvURL, testOwnerToken, expect, route)
 		cmd.Env = append(os.Environ(), "PLAYWRIGHT_CORE="+root, "CHROME_PATH="+chrome)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -53,11 +53,18 @@ func TestPanelConsole(t *testing.T) {
 		}
 		t.Logf("%s", out)
 	}
-	run(empty.URL, "no quest set yet")
+	run(empty.URL, "/", "no quest set yet")
 
 	with := newOwnerServer(t, true)
 	if code := call(t, with, "PUT", "/goal", "owner", `{"title":"Net revenue","target":1000}`, nil); code != 200 {
 		t.Fatalf("set quest: %d", code)
 	}
-	run(with.URL, "Net revenue")
+	run(with.URL, "/", "Net revenue")
+
+	// OS5: with a client bundle mounted, / is the tavern and the panel is at
+	// /panel/. The panel keeps the same console and CSP behavior there.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "index.html"), "<!doctype html><html><body>GAME</body></html>")
+	mounted := newOwnerServerWithClient(t, true, dir)
+	run(mounted.URL, "/panel/", "no quest set yet")
 }

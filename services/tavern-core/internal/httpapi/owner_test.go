@@ -19,10 +19,14 @@ import (
 // newOwnerServer wires the Front Desk into the server as main.go does
 // (Extra: desk.Register, Owner: desk.IsOwner).
 func newOwnerServer(t *testing.T, withGoal bool) *httptest.Server {
+	return newOwnerServerWithClient(t, withGoal, "")
+}
+
+func newOwnerServerWithClient(t *testing.T, withGoal bool, clientDir string) *httptest.Server {
 	t.Helper()
 	p := &profile.Profile{ID: "test", Model: "deepseek-v4-flash"}
 	approver := func(a string) bool { return a == "owner" }
-	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory(), Approver: approver}, Usage: usage.NewMemory()}
+	s := &Server{Gate: policy.New(p), Tasks: &tasks.Service{Store: tasks.NewMemory(), Approver: approver}, Usage: usage.NewMemory(), ClientDir: clientDir}
 	if withGoal {
 		s.Goal = &goal.Service{Store: goal.NewMemory(), Approver: approver}
 	}
