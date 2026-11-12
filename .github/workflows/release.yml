@@ -177,8 +177,12 @@ jobs:
           sbom: true
           cache-from: type=gha,scope=${{ matrix.image.name }}
 
+      # v4.1.3 is the installer that knows the cosign v3 asset layout: the v3
+      # releases ship .sigstore.json bundles and a release-cosign.pub, not the
+      # legacy .sig/.pem pair, so the pinned v3.8.1 installer fails here with
+      # "Fetched public key does not match" (curl 22 on the .sig download).
       - name: Install cosign
-        uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.1
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
           cosign-release: v3.1.4
 
