@@ -3,7 +3,7 @@ name: qa setup-node v7 probe
 # installs Node 22 and restores the npm cache on ubuntu-latest. No secrets,
 # no publish. Deleted after the run.
 on:
-  workflow_dispatch:
+  pull_request:
 
 permissions:
   contents: read

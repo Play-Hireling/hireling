@@ -111,3 +111,28 @@ jobs:
             fi
           done
           exit $missing
+
+  # Temporary QA probe for #32: the exact actions/setup-node v7.1.0 pin with the
+  # same inputs client-image.yml uses. Removed before this branch is deleted.
+  setup-node-probe:
+    name: QA setup-node v7.1.0 probe
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node (the #32 pin)
+        id: node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: probe/package-lock.json
+      - name: Prove the toolchain
+        run: |
+          node --version
+          npm --version
+          cd probe && npm ci
+      - name: Report the resolved version
+        run: echo "setup-node returned ${{ steps.node.outputs.node-version }} (cache-hit ${{ steps.node.outputs.cache-hit }})"
