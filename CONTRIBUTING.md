@@ -29,6 +29,8 @@ docker compose up -d --build   # the full tavern (see the quickstart)
 
 There is no root `go.mod`: `runtime/`, `services/tavern-core/`, `services/egress/` and `services/tavern-mcp/` are separate modules. tavern-core uses the runtime's `profile` package through a `replace` directive.
 
+Three tavern-core tests drive a real browser (`TestPanelStream`, `TestPanelConsole`, `TestTavernPlaysWithoutCSPViolation`). They **fail** when node, `playwright-core` or Chromium is missing, because a silent skip is how the owner panel's proof stopped running in CI once (#48). Install the toolchain with `npm install --no-save --prefix /tmp/panel-pw playwright-core && /tmp/panel-pw/node_modules/.bin/playwright-core install chromium` (CI caches it in `.pw/`). Only on a machine without any browser, `HIRELING_BROWSER_TESTS=off` skips them, and the test log says so; CI never sets it.
+
 ## Pull requests
 
 1. Fork, branch from `main` (`feat/…`, `fix/…`, `docs/…`).

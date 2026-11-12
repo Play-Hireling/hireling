@@ -9,34 +9,14 @@ import (
 
 // TestPanelConsole runs the owner panel in Chromium through Playwright at
 // 1440×900 and 390×844, with and without a quest. It requires node,
-// playwright-core and Chrome; otherwise it skips so `go test` stays green
-// where those are not installed. Set PLAYWRIGHT_CORE to the directory that
-// contains the playwright-core package (its parent node_modules, or the
-// package directory's parent).
+// playwright-core and a Chromium binary, and fails without them (#48); a dev
+// machine can set HIRELING_BROWSER_TESTS=off. Set PLAYWRIGHT_CORE to the
+// directory that contains the playwright-core package (its parent
+// node_modules) and CHROME_PATH to the browser, when they are not in the
+// defaults requireBrowser knows.
 func TestPanelConsole(t *testing.T) {
-	node, err := exec.LookPath("node")
-	if err != nil {
-		t.Skip("node not installed")
-	}
-	chrome := os.Getenv("CHROME_PATH")
-	if chrome == "" {
-		for _, p := range []string{"/usr/local/bin/google-chrome", "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"} {
-			if st, err := os.Stat(p); err == nil && !st.IsDir() {
-				chrome = p
-				break
-			}
-		}
-	}
-	if chrome == "" {
-		t.Skip("chrome not installed")
-	}
-	root := os.Getenv("PLAYWRIGHT_CORE")
-	if root == "" {
-		root = "/tmp/panel-pw/node_modules"
-	}
-	if _, err := os.Stat(filepath.Join(root, "playwright-core")); err != nil {
-		t.Skip("playwright-core not installed")
-	}
+	b := requireBrowser(t)
+	node, chrome, root := b.node, b.chrome, b.root
 	script := filepath.Join("panel_console.mjs")
 	if _, err := os.Stat(script); err != nil {
 		t.Fatal(err)

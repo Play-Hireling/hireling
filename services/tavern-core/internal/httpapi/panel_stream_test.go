@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 )
 
@@ -14,32 +13,11 @@ import (
 // fall back to the 5 s poll (once, not in a hot loop), and the panel must open
 // with and without the token at the five resolutions without a new console error.
 //
-// It skips where node, Chrome or playwright-core are not installed, the same
-// way the panel console test does.
+// It fails, not skips, when the browser toolchain is missing (#48): CI installs
+// Chromium, so a green run here means the proof actually ran.
 func TestPanelStream(t *testing.T) {
-	node, err := exec.LookPath("node")
-	if err != nil {
-		t.Skip("node not installed")
-	}
-	chrome := os.Getenv("CHROME_PATH")
-	if chrome == "" {
-		for _, p := range []string{"/usr/local/bin/google-chrome", "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"} {
-			if st, err := os.Stat(p); err == nil && !st.IsDir() {
-				chrome = p
-				break
-			}
-		}
-	}
-	if chrome == "" {
-		t.Skip("chrome not installed")
-	}
-	root := os.Getenv("PLAYWRIGHT_CORE")
-	if root == "" {
-		root = "/tmp/panel-pw/node_modules"
-	}
-	if _, err := os.Stat(filepath.Join(root, "playwright-core")); err != nil {
-		t.Skip("playwright-core not installed")
-	}
+	b := requireBrowser(t)
+	node, chrome, root := b.node, b.chrome, b.root
 	script := "panel_stream.mjs"
 	if _, err := os.Stat(script); err != nil {
 		t.Fatal(err)

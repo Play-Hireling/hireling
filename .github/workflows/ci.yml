@@ -30,12 +30,27 @@ jobs:
     env:
       GOTOOLCHAIN: local
       REDIS_TEST_URL: redis://127.0.0.1:6379/0
+      # The owner panel's browser proofs drive Chromium through playwright-core
+      # (#48). This is the path the tavern-core leg fills below; the other legs
+      # have no browser test and ignore it.
+      PLAYWRIGHT_CORE: ${{ github.workspace }}/.pw/node_modules
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache-dependency-path: ${{ matrix.module }}/go.sum
+      # TestPanelStream, TestPanelConsole and TestTavernPlaysWithoutCSPViolation
+      # used to skip here for lack of a browser, so the panel's proof ran only
+      # on a laptop (#48). They now fail without one, and this step provides it.
+      # The runner image already ships google-chrome (checked here, so an image
+      # that drops it fails on a named step instead of inside a test), and
+      # playwright-core is the piece that was missing: ~1 s, no 130 MB download.
+      - name: Browser for the panel proof
+        if: matrix.module == 'services/tavern-core'
+        run: |
+          npm install --no-save --no-audit --no-fund --prefix .pw playwright-core@1.65.0
+          google-chrome --version || chromium --version
       - name: gofmt
         run: test -z "$(gofmt -l ${{ matrix.module }})" || (gofmt -l ${{ matrix.module }}; exit 1)
       - name: vet
@@ -43,7 +58,12 @@ jobs:
         run: go vet ./...
       - name: test
         working-directory: ${{ matrix.module }}
-        run: go test -race ./...
+        env:
+          # The browser proofs print what they measured (#48: the stream lands
+          # well before the 5 s poll); a passing test's t.Logf only reaches the
+          # log with -v, so the tavern-core leg is verbose and the rest stay quiet.
+          TEST_VERBOSE: ${{ matrix.module == 'services/tavern-core' && '-v' || '' }}
+        run: go test -race $TEST_VERBOSE ./...
 
   images:
     name: Build images
