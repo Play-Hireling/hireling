@@ -57,8 +57,10 @@ func requireBrowser(t *testing.T) browserProof {
 	return browserProof{node: node, chrome: chrome, root: root}
 }
 
-// findChrome looks at CHROME_PATH first, then the distro paths, then the
-// Playwright download cache that CI fills (PLAYWRIGHT_BROWSERS_PATH, else
+// findChrome looks at CHROME_PATH first, then the distro paths (what CI uses:
+// the runner image ships google-chrome and the job only installs playwright-core),
+// then a Playwright download cache, for a machine that ran
+// `playwright-core install chromium` (PLAYWRIGHT_BROWSERS_PATH, else
 // ~/.cache/ms-playwright). Glob returns sorted hits, so the last one wins and
 // the newest browser revision is used.
 func findChrome() string {
