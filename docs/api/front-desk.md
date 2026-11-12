@@ -73,6 +73,15 @@ curl -N -H "Authorization: Bearer $FRONTDESK_OWNER_TOKEN" \
   http://127.0.0.1:8080/api/turn/stream
 ```
 
+The owner panel reads this endpoint with `fetch` and a small SSE parser, not with
+`EventSource`, because `EventSource` cannot send the owner `Authorization`
+header and the token must not travel in the query. The first `status` event is
+the panel's initial paint; each `turn` updates only that hireling's balloon. The
+panel keeps its 5 s `GET /api/status` poll as the safety net: on a missing
+token, `401`, `400`, a network error or a mid-stream `event: error`, it stops the
+stream with one console warning, does not reconnect in a loop, and the poll
+continues.
+
 ### `GET /api/decisions` — waiting on you
 → `{"decisions": [{"id": "d-…", "from": "social-media", "question": "…", "options": ["…"], "context": "…", "urgency": "normal", "at": "…"}]}`
 
