@@ -56,7 +56,10 @@ jobs:
           ref: ${{ inputs.playhireling_ref }}
           path: playhireling
           persist-credentials: false
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # cross-repo: o GITHUB_TOKEN deste repo não atravessa para o
+          # playhireling (privado) — o checkout morria em "Repository not found".
+          # PAT fine-grained, read-only em Play-Hireling/playhireling.
+          token: ${{ secrets.PLAYHIRELING_TOKEN }}
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -118,7 +121,10 @@ jobs:
           ref: ${{ inputs.playhireling_ref }}
           path: playhireling
           persist-credentials: false
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # cross-repo: o GITHUB_TOKEN deste repo não atravessa para o
+          # playhireling (privado) — o checkout morria em "Repository not found".
+          # PAT fine-grained, read-only em Play-Hireling/playhireling.
+          token: ${{ secrets.PLAYHIRELING_TOKEN }}
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
