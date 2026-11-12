@@ -69,7 +69,11 @@ Release images are built by [`.github/workflows/release.yml`](../../.github/work
 1. Settings → Secrets and variables → Actions → Variables → New variable: name `RELEASE_PUBLISH`, value `true`.
 2. Actions → Release images → Run workflow, and set **publish** to true.
 
-A tag push still only builds. The images, once published, are `ghcr.io/<owner>/hireling-runtime`, `hireling-tavern-core`, `hireling-egress`, `hireling-ledger-writer` and `hireling-gbrain`, tagged with the git tag. Compose keeps building `hireling/<name>:<HIRELING_TAG>` locally; pointing it at GHCR is a separate change after the first publish.
+A tag push still only builds. The images, once published, are `ghcr.io/<owner>/hireling-runtime`, `hireling-tavern-core`, `hireling-egress`, `hireling-ledger-writer` and `hireling-gbrain`, tagged with the git tag.
+
+Each one is a multi-arch manifest list (`linux/amd64` and `linux/arm64`), carries SLSA provenance and an SBOM, and is signed keyless with cosign over its digest. A manual run from a branch publishes only the `sha-<short>` tag, which is how that is tested without a release. See [Verify a published image](verify-images.md) for the `docker buildx imagetools inspect` and `cosign verify` commands, and deploy by digest rather than by tag.
+
+Compose keeps building `hireling/<name>:<HIRELING_TAG>` locally; pointing it at GHCR is a separate change after the first publish.
 
 The Hermes base image is `nousresearch/hermes-agent:latest`; pin it by digest in `runtime/Dockerfile` for reproducible builds.
 

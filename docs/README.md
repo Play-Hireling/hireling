@@ -24,6 +24,7 @@ New here? Read in this order: **Quickstart → Your first order → The tavern �
 - [Run your tavern with Claude Code](guides/claude-code.md)
 - [Run your tavern from Claude Code over MCP](guides/claude-code-mcp.md)
 - [Deploy to a server](guides/deploy.md)
+- [Verify a published image](guides/verify-images.md)
 
 ## Reference
 - [`bin/tavern` and `hireling` CLIs](reference/cli.md)
