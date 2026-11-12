@@ -137,6 +137,9 @@ type Loop struct {
 	// GateTurnFile, when set, is where the running turn is written for the
 	// gate hook, so the Autonomy Log (D4) can say which turn an action was in.
 	GateTurnFile string
+	// turnFileFailOnce logs a failed turn-file write once per process, with
+	// the euid and a hint, instead of one line per turn.
+	turnFileFailOnce sync.Once
 	// Gate, when set, carries the autonomy gate's blocks onto the owner's cards
 	// and turns his yes into one use of each blocked action (D1/D3).
 	Gate GateGrants
