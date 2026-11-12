@@ -55,7 +55,7 @@ try {
         window.__csp.push(e.violatedDirective + ' ' + e.blockedURI + ' ' + e.sample);
       });
     }, token);
-    await page.goto(url + path, { waitUntil: 'networkidle' });
+    await page.goto(url + path, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(5500);
     const body = await page.locator('body').innerText();
     if (!body.includes(expectText)) {
