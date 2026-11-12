@@ -1,0 +1,37 @@
+name: qa setup-node v7 probe
+# Temporary QA probe: proves actions/setup-node@v7.1.0 (the #32 pin) still
+# installs Node 22 and restores the npm cache on ubuntu-latest. No secrets,
+# no publish. Deleted after the run.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: setup-node v7.1.0 with node-version 22 and cache npm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node (the #32 pin)
+        id: node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: probe/package-lock.json
+
+      - name: Prove the toolchain
+        run: |
+          node --version
+          npm --version
+          node -e 'console.log("cache-hit:", process.env.CACHE_HIT || "n/a")'
+          cd probe && npm ci
+
+      - name: Report the resolved version
+        run: echo "setup-node returned ${{ steps.node.outputs.node-version }} (cache-hit ${{ steps.node.outputs.cache-hit }})"
