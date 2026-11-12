@@ -31,4 +31,4 @@ All three exit 0. The bundle is local; nothing was pushed and no image was publi
 
 ## Automated checks
 
-`go test ./...` in `services/tavern-core` covers the routing and the panel notice, and the Playwright checks (`panel_console_test.go`, `tavern_play_test.go`) cover both HTML pages. `TestAutonomyFirstAsks` fails on the base commit as well (unrelated to this change) and is skipped in that run.
+`go test ./...` in `services/tavern-core` covers the routing and the panel notice, and the Playwright checks (`panel_console_test.go`, `tavern_play_test.go`) cover both HTML pages. The full suite passes, including `TestAutonomyFirstAsks` (the asks clock fix), and nothing is skipped.
