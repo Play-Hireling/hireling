@@ -112,8 +112,30 @@ func (l *Loop) writeGateTurn(ctx context.Context, id, task, text string) {
 		t["priority"], t["tokens_per_day"] = prio, perDay
 	}
 	raw, _ := json.Marshal(t)
-	if err := os.WriteFile(l.GateTurnFile, raw, 0o640); err != nil {
-		l.logf("gate turn file: %v", err)
-		_ = os.Remove(l.GateTurnFile) // never leave the last turn's start and priority behind
+	err := os.WriteFile(l.GateTurnFile, raw, 0o640)
+	if err != nil {
+		// The file may be this process's but read-only (the owner can restore
+		// the mode without writing the directory), or stale/foreign (remove and
+		// rewrite). An unwritable directory is repaired by `hireling setup`'s
+		// lock (root:hermes 1775) on the next boot, not here. Only a regular
+		// file is chmodded: the path can be a directory left by a bad restore,
+		// and 0640 would take away its traverse bit.
+		if fi, statErr := os.Stat(l.GateTurnFile); statErr == nil && fi.Mode().IsRegular() {
+			if os.Chmod(l.GateTurnFile, 0o640) == nil {
+				err = os.WriteFile(l.GateTurnFile, raw, 0o640)
+			}
+		}
+		if err != nil && os.Remove(l.GateTurnFile) == nil {
+			err = os.WriteFile(l.GateTurnFile, raw, 0o640)
+		}
+	}
+	if err != nil {
+		// Never leave the last turn's start and priority behind: the hook would
+		// read it as this turn and D7 would count the day twice (decision #113).
+		_ = os.Remove(l.GateTurnFile)
+		l.turnFileFailOnce.Do(func() {
+			l.logf("gate turn file %s: %v (euid=%d; a deploy may have changed /opt/data's owner — the D4 turn link and the D7 in-turn cut are off until the next boot fixes it)",
+				l.GateTurnFile, err, os.Geteuid())
+		})
 	}
 }
