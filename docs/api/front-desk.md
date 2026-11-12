@@ -10,7 +10,7 @@ Any server that implements this contract can stand in for it.
 
 | Token | Variable | May call |
 | --- | --- | --- |
-| Owner | `FRONTDESK_OWNER_TOKEN` | `/api/status`, `/api/command`, `/api/decisions` (GET), `/api/decisions/{id}` (GET), `/api/decisions/{id}/choose`, `/api/interactions` (GET), `/api/tasks`, `/api/tasks/{id}`, `/api/quest` |
+| Owner | `FRONTDESK_OWNER_TOKEN` | `/api/status`, `/api/turn/stream`, `/api/command`, `/api/decisions` (GET), `/api/decisions/{id}` (GET), `/api/decisions/{id}/choose`, `/api/interactions` (GET), `/api/tasks`, `/api/tasks/{id}`, `/api/quest` |
 | Hireling (own) | `FRONTDESK_TOKEN_<ID>` | Only its own `agent`/`from` |
 | Hireling (shared) | `FRONTDESK_AGENT_TOKEN` | Any hireling of the tavern |
 
@@ -39,6 +39,39 @@ Unknown agents are `401`. Tokens are compared in constant time. tavern-core refu
 ```
 
 `quest` is the same object as [`GET /api/quest`](#the-task-board-and-the-quest-read-only), or `null` when no quest is set. The owner panel reads it here, so a missing quest is an empty state on this 200. `GET /api/quest` is still 404 until a quest is set. The response sends `Cache-Control: no-store` so a poll cannot reuse a stale party or quest.
+
+### `GET /api/turn/stream[?agent=<id>]` — follow turns as they happen
+
+Owner token. `text/event-stream`: the desk keeps the connection open and pushes
+every turn the hirelings report, so the first words of an answer arrive before
+the turn ends (A13). `?agent=` limits the `turn` events to one hireling.
+
+The first event is the same snapshot as `GET /api/status`:
+
+```text
+event: status
+data: {"agents": [ … ], "decisions": [ … ], "interactions": [ … ], "quest": null, "at": "…"}
+```
+
+Each `POST /api/turn` then follows as a `turn` event whose data is that turn.
+A `step` carries the answer text so far, which is how the answer streams:
+
+```text
+event: turn
+data: {"agent": "dev", "phase": "step", "step": "The first words…", "at": "…"}
+```
+
+A `: ping` comment every 15 s keeps an idle stream from being closed by a
+proxy. Errors are explicit: `401` (no owner token) or `400` (unknown `agent`)
+as JSON before the first byte, and a mid-stream `event: error` —
+`{"error": "desk closed"}` or `{"error": "stream too slow"}` — followed by the
+end of the stream, never a silent stall. There is no replay: a reconnecting
+client reads `status` first and follows from there.
+
+```bash
+curl -N -H "Authorization: Bearer $FRONTDESK_OWNER_TOKEN" \
+  http://127.0.0.1:8080/api/turn/stream
+```
 
 ### `GET /api/decisions` — waiting on you
 → `{"decisions": [{"id": "d-…", "from": "social-media", "question": "…", "options": ["…"], "context": "…", "urgency": "normal", "at": "…"}]}`

@@ -14,6 +14,7 @@
 // The owner (with the owner token):
 //
 //	GET  /api/status                      every hireling's last turn, open decisions, conversations, and the quest (null when unset)
+//	GET  /api/turn/stream[?agent=]        follows the turns as hirelings report them (SSE)
 //	POST /api/command                     {agent, text} — an order for a hireling
 //	GET  /api/decisions                   open decisions
 //	GET  /api/decisions/{id}              one decision, open or answered (chosen set)
@@ -34,6 +35,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strconv"
@@ -44,6 +46,13 @@ import (
 
 // MaxWait caps the long poll of GET /api/commands/{agent}?wait=.
 const MaxWait = 25 * time.Second
+
+// StreamPing is the keepalive comment interval of GET /api/turn/stream.
+const StreamPing = 15 * time.Second
+
+// streamBuffer is how many turn events one stream may fall behind before the
+// desk closes it (a turn never waits for a reader).
+const streamBuffer = 32
 
 // Turn is the body of POST /api/turn (same shape the runtime sends).
 type Turn struct {
@@ -135,6 +144,14 @@ type Desk struct {
 	mu      sync.Mutex
 	st      State
 	waiters map[string][]chan struct{}
+	streams map[*turnStream]struct{}
+}
+
+// turnStream is one open GET /api/turn/stream.
+type turnStream struct {
+	agent string // "" = every hireling
+	ch    chan Turn
+	err   string // why the desk closed it; valid once ch is closed
 }
 
 // Load restores the state from the Persister (call once at start).
@@ -328,6 +345,7 @@ func (d *Desk) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/decisions/{id}/choose", d.choose)
 	mux.HandleFunc("POST /api/command", d.order)
 	mux.HandleFunc("GET /api/status", d.status)
+	mux.HandleFunc("GET /api/turn/stream", d.turnStream)
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -377,6 +395,7 @@ func (d *Desk) turn(w http.ResponseWriter, r *http.Request) {
 	}
 	d.st.Turns[t.Agent] = t
 	d.save(r.Context())
+	d.publish(t)
 	d.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
@@ -694,18 +713,22 @@ type AgentStatus struct {
 	LastDone *Command `json:"lastDone,omitempty"`
 }
 
-func (d *Desk) status(w http.ResponseWriter, r *http.Request) {
-	// The owner panel polls this. A cached 200 would keep a stale party or a
-	// quest that has since been set.
-	w.Header().Set("Cache-Control", "no-store")
-	if !d.owner(r) {
-		errJSON(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	// Outside the lock: the callback reads the quest store, not the desk.
+// Status is the body of GET /api/status and the first event of
+// GET /api/turn/stream.
+type Status struct {
+	Agents       []AgentStatus `json:"agents"`
+	Decisions    []Decision    `json:"decisions"`
+	Interactions []Interaction `json:"interactions"`
+	Quest        any           `json:"quest"`
+	At           string        `json:"at"`
+}
+
+// snapshot assembles the desk's current view. The quest callback runs outside
+// the lock: it reads its own store, not the desk.
+func (d *Desk) snapshot(ctx context.Context) Status {
 	var quest any
 	if d.Quest != nil {
-		quest = d.Quest(r.Context())
+		quest = d.Quest(ctx)
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -726,11 +749,161 @@ func (d *Desk) status(w http.ResponseWriter, r *http.Request) {
 		}
 		rows = append(rows, row)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"agents":       rows,
-		"decisions":    d.openDecisions(),
-		"interactions": append([]Interaction{}, d.st.Interactions...),
-		"quest":        quest,
-		"at":           d.stamp(),
-	})
+	return Status{
+		Agents:       rows,
+		Decisions:    d.openDecisions(),
+		Interactions: append([]Interaction{}, d.st.Interactions...),
+		Quest:        quest,
+		At:           d.stamp(),
+	}
+}
+
+func (d *Desk) status(w http.ResponseWriter, r *http.Request) {
+	// The owner panel polls this. A cached 200 would keep a stale party or a
+	// quest that has since been set.
+	w.Header().Set("Cache-Control", "no-store")
+	if !d.owner(r) {
+		errJSON(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	writeJSON(w, http.StatusOK, d.snapshot(r.Context()))
+}
+
+// subscribe registers one turn stream (mu not held).
+func (d *Desk) subscribe(agent string) *turnStream {
+	s := &turnStream{agent: agent, ch: make(chan Turn, streamBuffer)}
+	d.mu.Lock()
+	if d.streams == nil {
+		d.streams = map[*turnStream]struct{}{}
+	}
+	d.streams[s] = struct{}{}
+	d.mu.Unlock()
+	return s
+}
+
+func (d *Desk) unsubscribe(s *turnStream) {
+	d.mu.Lock()
+	delete(d.streams, s)
+	d.mu.Unlock()
+}
+
+// publish hands a reported turn to every open stream. It never blocks a
+// hireling: a reader that cannot keep up is closed with an error and dropped.
+// d.mu must be held.
+func (d *Desk) publish(t Turn) {
+	for s := range d.streams {
+		if s.agent != "" && s.agent != t.Agent {
+			continue
+		}
+		select {
+		case s.ch <- t:
+		default:
+			s.err = "stream too slow"
+			close(s.ch)
+			delete(d.streams, s)
+		}
+	}
+}
+
+// Close ends every open turn stream with an error event instead of a silent
+// EOF; the rest of the desk keeps serving. tavern-core calls it on shutdown.
+func (d *Desk) Close() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for s := range d.streams {
+		s.err = "desk closed"
+		close(s.ch)
+		delete(d.streams, s)
+	}
+}
+
+// sse writes one Server-Sent Event and flushes it. The flush goes through the
+// ResponseController: ServeMux wraps the ResponseWriter (Go 1.22+), so a
+// plain http.Flusher assertion would fail on the real server.
+func sse(w io.Writer, rc *http.ResponseController, event string, v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b); err != nil {
+		return err
+	}
+	return rc.Flush()
+}
+
+// canFlush reports whether w (or the writer it wraps) flushes, without
+// writing anything: a middleware may hide http.Flusher while exposing Unwrap.
+func canFlush(w http.ResponseWriter) bool {
+	for {
+		if _, ok := w.(http.Flusher); ok {
+			return true
+		}
+		u, ok := w.(interface{ Unwrap() http.ResponseWriter })
+		if !ok {
+			return false
+		}
+		w = u.Unwrap()
+	}
+}
+
+// turnStream is GET /api/turn/stream: Server-Sent Events of the turns as the
+// hirelings report them (A13). The first event is the same snapshot as
+// GET /api/status, so a client connects once and stops polling; every
+// POST /api/turn follows as a "turn" event, which is how the first words of an
+// answer reach the owner before the turn ends. Errors are explicit: a status
+// before the first byte, or an "error" event and the end of the stream.
+func (d *Desk) turnStream(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if !d.owner(r) {
+		errJSON(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	agent := r.URL.Query().Get("agent")
+	if agent != "" && !d.known(agent) {
+		errJSON(w, http.StatusBadRequest, "unknown agent")
+		return
+	}
+	// A writer that cannot flush gets an explicit status before the first
+	// byte instead of a stream that would buffer to the end.
+	if !canFlush(w) {
+		errJSON(w, http.StatusInternalServerError, "streaming unsupported")
+		return
+	}
+	s := d.subscribe(agent)
+	defer d.unsubscribe(s)
+
+	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	rc := http.NewResponseController(w)
+	if err := sse(w, rc, "status", d.snapshot(r.Context())); err != nil {
+		return
+	}
+	ping := time.NewTicker(StreamPing)
+	defer ping.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ping.C:
+			if _, err := io.WriteString(w, ": ping\n\n"); err != nil {
+				return
+			}
+			if err := rc.Flush(); err != nil {
+				return
+			}
+		case t, open := <-s.ch:
+			if !open {
+				d.mu.Lock()
+				reason := s.err
+				d.mu.Unlock()
+				_ = sse(w, rc, "error", map[string]string{"error": reason})
+				return
+			}
+			if err := sse(w, rc, "turn", t); err != nil {
+				return
+			}
+		}
+	}
 }
