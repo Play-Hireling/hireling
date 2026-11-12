@@ -21,32 +21,11 @@ import (
 // TestTavernPlaysWithoutCSPViolation loads /tavern/ in Chromium at 1440,
 // 390, 2560×1080 and 3440×1440. The page is the self-host client shape
 // (token screen, walk, order, decision) served by tavern-core, so the CSP
-// in security.go is the one the browser enforces. It skips where node,
-// Chrome or playwright-core are not installed, the same way the panel test does.
+// in security.go is the one the browser enforces. It fails, not skips, when
+// node, Chrome or playwright-core is missing (#48).
 func TestTavernPlaysWithoutCSPViolation(t *testing.T) {
-	node, err := exec.LookPath("node")
-	if err != nil {
-		t.Skip("node not installed")
-	}
-	chrome := os.Getenv("CHROME_PATH")
-	if chrome == "" {
-		for _, p := range []string{"/usr/bin/google-chrome", "/usr/local/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"} {
-			if st, err := os.Stat(p); err == nil && !st.IsDir() {
-				chrome = p
-				break
-			}
-		}
-	}
-	if chrome == "" {
-		t.Skip("chrome not installed")
-	}
-	root := os.Getenv("PLAYWRIGHT_CORE")
-	if root == "" {
-		root = "/tmp/panel-pw/node_modules"
-	}
-	if _, err := os.Stat(filepath.Join(root, "playwright-core")); err != nil {
-		t.Skip("playwright-core not installed")
-	}
+	b := requireBrowser(t)
+	node, chrome, root := b.node, b.chrome, b.root
 
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "index.html"), tavernPlayHTML)
