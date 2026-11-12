@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -95,6 +96,95 @@ func TestClientServed(t *testing.T) {
 		if strings.Contains(strings.ToLower(body), bad) {
 			t.Errorf("client page leaks %q", bad)
 		}
+	}
+	// OS5: without a bundle the root is the panel, and the panel says how to
+	// build the client instead of linking to a route that is not there.
+	for _, want := range []string{"Plain-art client not built", "scripts/pack-client.sh", "docker compose --profile game"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("panel without a client missing %q", want)
+		}
+	}
+	panel, err := http.Get(srv.URL + "/panel/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pb, _ := io.ReadAll(panel.Body)
+	panel.Body.Close()
+	if panel.StatusCode != http.StatusOK || !strings.Contains(string(pb), `src="/client.js"`) || panel.Header.Get("Content-Security-Policy") != PanelContentSecurityPolicy {
+		t.Fatalf("GET /panel/ = %d CSP %q", panel.StatusCode, panel.Header.Get("Content-Security-Policy"))
+	}
+	noredirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	canon, err := noredirect.Get(srv.URL + "/panel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	canon.Body.Close()
+	if canon.StatusCode != http.StatusPermanentRedirect || canon.Header.Get("Location") != "/panel/" {
+		t.Fatalf("/panel: %d location %q", canon.StatusCode, canon.Header.Get("Location"))
+	}
+}
+
+// OS5: when the client bundle is mounted, the promised root opens the tavern
+// and the panel keeps a stable route at /panel/.
+func TestRootOpensTheTavernWhenTheClientIsMounted(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "index.html"), "<!doctype html><html><body>GAME-INDEX</body></html>")
+	s := &Server{Gate: policy.New(&profile.Profile{ID: "test"}),
+		Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(), ClientDir: dir}
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	noredirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	root, err := noredirect.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root.Body.Close()
+	if root.StatusCode != http.StatusTemporaryRedirect || root.Header.Get("Location") != "/tavern/" {
+		t.Fatalf("/: %d location %q", root.StatusCode, root.Header.Get("Location"))
+	}
+	if root.Header.Get("Cache-Control") != "no-store" {
+		t.Fatalf("/ redirect Cache-Control = %q", root.Header.Get("Cache-Control"))
+	}
+
+	panel, err := http.Get(srv.URL + "/panel/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(panel.Body)
+	panel.Body.Close()
+	if panel.StatusCode != http.StatusOK || !strings.Contains(string(body), `href="/tavern/"`) {
+		t.Fatalf("/panel/ = %d body %q", panel.StatusCode, body)
+	}
+	if strings.Contains(string(body), "Plain-art client not built") {
+		t.Fatal("panel still says the client is not built")
+	}
+}
+
+// OS5: the panel is also served when ClientDir exists but has no index.html
+// (an empty volume), and the root keeps the build notice.
+func TestRootStaysPanelWhenTheVolumeIsEmpty(t *testing.T) {
+	s := &Server{Gate: policy.New(&profile.Profile{ID: "test"}),
+		Tasks: &tasks.Service{Store: tasks.NewMemory()}, Usage: usage.NewMemory(), ClientDir: t.TempDir()}
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+
+	res, err := http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK || !strings.Contains(string(body), "Plain-art client not built") {
+		t.Fatalf("/ with an empty volume = %d body %q", res.StatusCode, body)
+	}
+	miss, err := http.Get(srv.URL + "/tavern/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	miss.Body.Close()
+	if miss.StatusCode != http.StatusNotFound {
+		t.Fatalf("/tavern/ with an empty volume = %d", miss.StatusCode)
 	}
 }
 

@@ -6,11 +6,14 @@ import { pathToFileURL } from 'node:url';
 const root = process.env.PLAYWRIGHT_CORE || '/tmp/panel-pw/node_modules';
 const { chromium } = await import(pathToFileURL(root + '/playwright-core/index.mjs').href);
 
-const [url, token, expectText] = process.argv.slice(2);
+const [url, token, expectText, route] = process.argv.slice(2);
 if (!url || !token || !expectText) {
-  console.error('usage: panel_console.mjs <url> <token> <text>');
+  console.error('usage: panel_console.mjs <url> <token> <text> [path]');
   process.exit(2);
 }
+const path = route || '/';
+const shotDir = process.env.SHOT_DIR || '';
+const shot = process.env.SHOT_PREFIX || 'panel';
 
 const chrome = process.env.CHROME_PATH || '/usr/local/bin/google-chrome';
 const browser = await chromium.launch({
@@ -52,7 +55,7 @@ try {
         window.__csp.push(e.violatedDirective + ' ' + e.blockedURI + ' ' + e.sample);
       });
     }, token);
-    await page.goto(url + '/', { waitUntil: 'networkidle' });
+    await page.goto(url + path, { waitUntil: 'networkidle' });
     await page.waitForTimeout(5500);
     const body = await page.locator('body').innerText();
     if (!body.includes(expectText)) {
@@ -60,6 +63,7 @@ try {
     }
     const found = await page.evaluate(() => window.__csp || []);
     for (const v of found) csp.push(label + ' ' + v);
+    if (shotDir) await page.screenshot({ path: shotDir + '/' + shot + '-' + label + '.png' });
     await page.close();
   }
 } finally {

@@ -101,6 +101,7 @@ func TestCSPDependsOnPathPrefixOnly(t *testing.T) {
 	srv := httptest.NewServer(s.Handler())
 	defer srv.Close()
 
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	check := func(rawURL, referer, accept, want string) {
 		t.Helper()
 		req, err := http.NewRequest(http.MethodGet, rawURL, nil)
@@ -113,7 +114,7 @@ func TestCSPDependsOnPathPrefixOnly(t *testing.T) {
 		if accept != "" {
 			req.Header.Set("Accept", accept)
 		}
-		res, err := http.DefaultClient.Do(req)
+		res, err := client.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -128,6 +129,8 @@ func TestCSPDependsOnPathPrefixOnly(t *testing.T) {
 
 	check(srv.URL+"/tavern/", "", "", TavernContentSecurityPolicy)
 	check(srv.URL+"/tavern/play.js", "", "", TavernContentSecurityPolicy)
+	check(srv.URL+"/panel/", "", "", PanelContentSecurityPolicy)
+	check(srv.URL+"/panel", "", "", PanelContentSecurityPolicy)
 	check(srv.URL+"/", "", "", PanelContentSecurityPolicy)
 	check(srv.URL+"/no-such-route", "", "", PanelContentSecurityPolicy)
 	check(srv.URL+"/tavernX", "", "", PanelContentSecurityPolicy)
@@ -177,11 +180,20 @@ func TestCSPMatchesTheHandler(t *testing.T) {
 	}
 	t.Logf("route /%%74avern/ → fixture index.html → game")
 
-	panel := rawRequest(t, srv, "/")
-	if panel.status != http.StatusOK || !strings.Contains(panel.body, `src="/client.js"`) || panel.csp != PanelContentSecurityPolicy {
-		t.Fatalf("/ status %d CSP %q", panel.status, panel.csp)
+	// / is a 307 to the game when a bundle is mounted. The redirect carries
+	// the panel policy; the game files carry the game policy. Identified by
+	// status and Location, not by a header.
+	root := rawRequest(t, srv, "/")
+	if root.status != http.StatusTemporaryRedirect || root.location != "/tavern/" || root.csp != PanelContentSecurityPolicy {
+		t.Fatalf("/ status %d location %q CSP %q", root.status, root.location, root.csp)
 	}
-	t.Logf("route / → panel HTML (client.js) → panel")
+	t.Logf("route / → redirect to %s (status %d) → tavern", root.location, root.status)
+
+	panel := rawRequest(t, srv, "/panel/")
+	if panel.status != http.StatusOK || !strings.Contains(panel.body, `src="/client.js"`) || panel.csp != PanelContentSecurityPolicy {
+		t.Fatalf("/panel/ status %d CSP %q", panel.status, panel.csp)
+	}
+	t.Logf("route /panel/ → panel HTML (client.js) → panel")
 
 	other := rawRequest(t, srv, "/tavernX/")
 	if other.status != http.StatusNotFound || other.csp != PanelContentSecurityPolicy || strings.Contains(other.body, "GAME-") {

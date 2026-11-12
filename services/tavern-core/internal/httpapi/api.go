@@ -82,8 +82,10 @@ type Server struct {
 	// Extra registers more routes on the same mux (the Front Desk).
 	Extra func(*http.ServeMux)
 	// ClientDir is the self-host game (index.html and assets) served at
-	// /tavern/. Empty means the route answers 404. Compose mounts the
-	// data-only image's copy at /tavern/client.
+	// /tavern/. When it holds an index.html, GET / redirects there and the
+	// owner panel lives at /panel/. Empty (or no index.html) means /tavern/
+	// answers 404, GET / is the panel, and the panel states how to build the
+	// client. Compose mounts the data-only image's copy at /tavern/client.
 	ClientDir string
 	// Owner reports whether a request carries the owner token (the Front
 	// Desk's IsOwner). It guards GET /api/tasks, /api/tasks/{id},
@@ -125,7 +127,9 @@ func (s *Server) now() time.Time {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", s.client) // OS5: the owner panel (not the pixel-art tavern)
+	mux.HandleFunc("GET /{$}", s.root) // OS5: the tavern when a client is mounted, else the owner panel
+	mux.HandleFunc("GET /panel", s.panelSlash)
+	mux.HandleFunc("GET /panel/", s.panel) // OS5: the owner panel (not the pixel-art tavern)
 	mux.HandleFunc("GET /client.css", s.clientCSS)
 	mux.HandleFunc("GET /client.js", s.clientJS)
 	mux.HandleFunc("GET /tavern", s.tavernSlash)
