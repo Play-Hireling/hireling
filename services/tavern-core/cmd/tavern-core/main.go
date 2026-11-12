@@ -149,6 +149,7 @@ func main() {
 	defer stop()
 	go func() {
 		<-ctx.Done()
+		desk.Close() // open turn streams end with an error event, not a reset
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = hs.Shutdown(shutdown)

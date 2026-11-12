@@ -37,4 +37,9 @@ order / bar message ──► lock (one turn at a time per hireling)
    ──► usage recorded ──► Front Desk: end (+ ack done | rejected)
 ```
 
+While the model writes, the runtime reports the answer text so far as a `step`.
+The owner panel follows it live with `GET /api/turn/stream` (Server-Sent Events),
+so the first words show up before the turn ends; the plain `POST /api/turn` JSON
+and `GET /api/status` polling stay exactly as they were.
+
 Read next: [Hirelings](hirelings.md).
