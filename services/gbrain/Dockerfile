@@ -4,7 +4,7 @@
 # GBrain is a Bun CLI installed from its GitHub tag (it is not on npm: the npm
 # package named "gbrain" is unrelated). The tag is pinned so a deploy never
 # picks up a new GBrain by surprise; bump GBRAIN_REF in a PR.
-FROM oven/bun:1.4.4-debian
+FROM oven/bun:1.4.5-debian
 
 ARG GBRAIN_REF=stable-v0.60.474.0
 
